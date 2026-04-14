@@ -95,4 +95,4 @@ const DisabilityInfoStep: React.FC<DisabilityInfoStepProps> = ({ control, errors
   );
 };
 
-export default DisabilityInfoStep; 
+export default DisabilityInfoStep;

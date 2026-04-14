@@ -1,3 +1,4 @@
+// src/pages/LoginPage.tsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
@@ -16,24 +17,15 @@ const LoginPage: React.FC = () => {
   const from = location.state?.from?.pathname || "/";
 
   const onFinish = async (values: any) => {
-    setCurrentError(null); // Сброс предыдущей ошибки перед новой попыткой
+    setCurrentError(null);
     try {
       await login(values.username, values.password);
-      // При успешном логине AuthContext обновит isAuthenticated,
-      // и ProtectedRoute должен автоматически перенаправить.
-      // Если ProtectedRoute нет или нужно явное перенаправление:
       navigate(from, { replace: true });
     } catch (error: any) {
-        // Ошибка уже обработана в AuthContext и установлена в authError
-        // Если нужно показать ошибку именно здесь, можно использовать setCurrentError
-        // или напрямую authError, если он не сбрасывается слишком быстро.
-        // В данном случае, authError из useAuth() должен быть актуален.
-        // Для примера, можно также установить локальную ошибку, если нужно специфичное поведение.
-        // setCurrentError(error.message || "Произошла ошибка при входе.");
+      // Ошибка обработана в AuthContext
     }
   };
 
-  // Следим за authError из контекста, чтобы отобразить его
   useEffect(() => {
     if (authError) {
         setCurrentError(authError);
@@ -81,11 +73,11 @@ const LoginPage: React.FC = () => {
             </Form>
         </Spin>
         <Text type="secondary" style={{ textAlign: 'center', display: 'block', marginTop: 16 }}>
-            Учетные данные по умолчанию: admin/adminPas или manager/managerPas
+          Учетные данные по умолчанию: <strong>admin / admin</strong> или <strong>manager / manager</strong>
         </Text>
       </Card>
     </div>
   );
 };
 
-export default LoginPage; 
+export default LoginPage;

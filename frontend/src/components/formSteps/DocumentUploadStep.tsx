@@ -128,36 +128,30 @@ const DocumentUploadStep: React.FC<DocumentUploadStepProps> = ({
         } else if (docType === 'work_book' && data) {
             const wbData = data as WorkBookData;
             
-            // Получаем текущие данные из формы
             const currentRecords = control._getWatch('work_experience.records') || [];
             const currentEvents = control._getWatch('work_experience.raw_events') || [];
 
-            // Добавляем новые записи о периодах, инициализируя special_conditions
             if (wbData.records && wbData.records.length > 0) {
                 const newMappedRecords = wbData.records.map(ocrRecord => ({
                     ...ocrRecord,
-                    special_conditions: false, // OCR не определяет это, пользователь может указать позже
+                    special_conditions: false,
                 }));
                 setValue('work_experience.records', [...currentRecords, ...newMappedRecords], { shouldValidate: true, shouldDirty: true });
             }
 
-            // Добавляем новые сырые события
             if (wbData.raw_events && wbData.raw_events.length > 0) {
                 setValue('work_experience.raw_events', [...currentEvents, ...wbData.raw_events], { shouldDirty: true });
             }
             
-            // После успешного получения данных из ТК, обновляем поля react-hook-form
             if (wbData.calculated_total_years !== null && wbData.calculated_total_years !== undefined) {
                 setValue('work_experience.calculated_total_years', wbData.calculated_total_years, { shouldValidate: true, shouldDirty: true });
             }
             if (wbData.records) {
-                // Заменяем существующие записи на новые из OCR
                 setValue('work_experience.records', wbData.records, { shouldValidate: true, shouldDirty: true });
             }
             if (wbData.raw_events) {
                 setValue('work_experience.raw_events', wbData.raw_events, { shouldValidate: true, shouldDirty: true });
             }
-            // Триггерим валидацию, чтобы UI обновился
             trigger('work_experience.calculated_total_years');
             trigger('work_experience.records');
             
@@ -183,7 +177,7 @@ const DocumentUploadStep: React.FC<DocumentUploadStepProps> = ({
     };
 
     const handleOcrError = (message: string, docType: DocumentTypeToExtract, file?: UploadFile) => {
-        const errorMsg = `Ошибка OCR (${docType}${file ? ", "+file.name : ''}): ${message}`;
+        const errorMsg = `Ошибка распознавания (${docType}${file ? ", "+file.name : ''}): ${message}`;
         setOcrGlobalError(errorMsg);
         antdMessage.error(errorMsg);
         if (docType === 'passport') {
@@ -202,7 +196,7 @@ const DocumentUploadStep: React.FC<DocumentUploadStepProps> = ({
                 attempted: true,
                 processing: false,
                 error: errorsInBatch,
-                success: !errorsInBatch, // Consider batch successful if no errors occurred
+                success: !errorsInBatch,
             });
             if (errorsInBatch) {
                 antdMessage.warning('При обработке файлов трудовой книжки возникли ошибки. Проверьте данные.');
@@ -232,7 +226,6 @@ const DocumentUploadStep: React.FC<DocumentUploadStepProps> = ({
         </Descriptions>
     );
 
-
     return (
         <div style={{ maxWidth: '700px', margin: '0 auto' }}>
             <Title level={4} style={{ marginBottom: '16px', textAlign: 'center' }}>Загрузка основных документов</Title>
@@ -250,7 +243,7 @@ const DocumentUploadStep: React.FC<DocumentUploadStepProps> = ({
                     onOcrError={handleOcrError}
                     onProcessingStart={handleProcessingStart}
                     uploaderTitle="Загрузить скан паспорта (разворот с фото)"
-                    allowMultipleFiles={false} // Паспорт - один файл
+                    allowMultipleFiles={false}
                 />
                 {passportStatus.success && passportData && renderPassportData(passportData)}
                 {passportStatus.error && <Alert message="Ошибка обработки паспорта. Попробуйте загрузить другой файл." type="warning" showIcon />}
@@ -263,7 +256,7 @@ const DocumentUploadStep: React.FC<DocumentUploadStepProps> = ({
                     onOcrError={handleOcrError}
                     onProcessingStart={handleProcessingStart}
                     uploaderTitle="Загрузить скан СНИЛС"
-                    allowMultipleFiles={false} // СНИЛС - один файл
+                    allowMultipleFiles={false}
                 />
                 {snilsStatus.success && snilsData && renderSnilsData(snilsData)}
                 {snilsStatus.error && <Alert message="Ошибка обработки СНИЛС. Попробуйте загрузить другой файл." type="warning" showIcon />}
@@ -272,14 +265,13 @@ const DocumentUploadStep: React.FC<DocumentUploadStepProps> = ({
 
                 <OcrUploader
                     documentType="work_book"
-                    onOcrSuccess={handleOcrSuccess} // individual file success
-                    onOcrError={handleOcrError}     // individual file error
-                    onProcessingStart={handleProcessingStart} // batch processing start
-                    onBatchFinished={handleWorkBookBatchFinished} // batch finished
+                    onOcrSuccess={handleOcrSuccess}
+                    onOcrError={handleOcrError}
+                    onProcessingStart={handleProcessingStart}
+                    onBatchFinished={handleWorkBookBatchFinished}
                     uploaderTitle="Загрузить сканы трудовой книжки (все страницы)"
-                    allowMultipleFiles={true} // Трудовая может быть из нескольких файлов
+                    allowMultipleFiles={true}
                 />
-                {/* Предпросмотр для трудовой теперь не отображается здесь, т.к. данные агрегируются в форму */}
                 {workBookStatus.attempted && workBookStatus.error && 
                     <Alert message="При обработке файлов трудовой книжки возникли ошибки. Проверьте данные на следующем шаге." type="warning" showIcon />
                 }
@@ -291,4 +283,4 @@ const DocumentUploadStep: React.FC<DocumentUploadStepProps> = ({
     );
 };
 
-export default DocumentUploadStep; 
+export default DocumentUploadStep;

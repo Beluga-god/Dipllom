@@ -23,24 +23,25 @@ import {
   IdcardOutlined,
   InfoCircleOutlined,
   LoadingOutlined,
+  GiftOutlined,
 } from '@ant-design/icons';
 import { useForm, FormProvider, useFieldArray, Controller } from 'react-hook-form';
 
 // API клиент и типы
-import { createCase, getCaseStatus, getPensionTypes, getStandardDocumentNames, getPensionDocuments } from '../services/apiClient';
+import { createCase, getCaseStatus, getBenefitTypes, getStandardDocumentNames, getBenefitDocuments } from '../services/apiClient';
 import type {
   CaseDataInput,
   ProcessOutput,
   ApiError,
-  PensionTypeInfo,
+  BenefitTypeInfo,
   DisabilityInfo,
   OtherDocumentData,
   DocumentDetail,
   CaseFormDataTypeForRHF
 } from '../types';
 
-// Компоненты шагов (будем создавать их позже)
-import PensionTypeStep from '../components/formSteps/PensionTypeStep';
+// Компоненты шагов
+import BenefitTypeStep from '../components/formSteps/BenefitTypeStep';
 import DocumentUploadStep from '../components/formSteps/DocumentUploadStep';
 import PersonalDataStep from '../components/formSteps/PersonalDataStep';
 import WorkExperienceStep from '../components/formSteps/WorkExperienceStep';
@@ -51,23 +52,21 @@ import ProcessResultDisplay from '../components/ProcessResultDisplay';
 
 const { Title } = Typography;
 
-const POLLING_INTERVAL = 5000; // 5 секунд для опроса статуса дела
+const POLLING_INTERVAL = 5000;
 
-// Начальные значения для react-hook-form, используем CaseFormDataTypeForRHF
 const initialRHFValues: CaseFormDataTypeForRHF = {
-  pension_type: undefined,
+  benefit_type: undefined,
   personal_data: {
     last_name: '',
     first_name: '',
     middle_name: null,
     birth_date: '',
     snils: '',
-    gender: '', // Должно быть 'male' или 'female' или другое валидное значение
+    gender: '',
     citizenship: 'Россия',
     name_change_info: null,
     name_change_info_checkbox: false,
-    dependents: 0, // dependents по API в personal_data
-    // Поля паспорта из CaseFormDataTypeForRHF
+    dependents: 0,
     passport_series: '',
     passport_number: '',
     passport_issue_date: '',
@@ -82,26 +81,21 @@ const initialRHFValues: CaseFormDataTypeForRHF = {
     raw_events: [],
   },
   pension_points: null,
-  benefits: '', // Строка тегов
-  // submitted_documents теперь называется 'documents' в AdditionalInfoStep для RHF
-  documents: '', // Строка тегов для стандартных документов
+  benefits: '',
+  documents: '',
   has_incorrect_document: false,
   other_documents_extracted_data: [],
-  // Убираем dependentsUi, т.к. dependents теперь часть personal_data и CaseFormDataTypeForRHF
 };
 
-
 const HomePage: React.FC = () => {
-  const [antdForm] = Form.useForm(); // Экземпляр формы Ant Design для layout и validateFields (если нужно)
+  const [antdForm] = Form.useForm();
 
-  // Инициализация React Hook Form
   const rhfMethods = useForm<CaseFormDataTypeForRHF>({
     defaultValues: initialRHFValues,
-    mode: 'onChange', // или 'onBlur', 'onSubmit'
+    mode: 'onChange',
   });
   const { control, watch, setValue, getValues, formState: { errors: rhfErrors }, trigger, handleSubmit, reset: rhfReset } = rhfMethods;
 
-  // Для WorkExperienceStep (динамические поля стажа)
   const { fields: workExperienceFields, append: appendWorkExperience, remove: removeWorkExperience } = useFieldArray({
     control,
     name: "work_experience.records",
@@ -116,39 +110,37 @@ const HomePage: React.FC = () => {
   const [ocrStepNextButtonDisabled, setOcrStepNextButtonDisabled] = useState(false);
   const [personalDataStepValid, setPersonalDataStepValid] = useState(false);
 
-  // Состояния для справочников
-  const [pensionTypes, setPensionTypes] = useState<PensionTypeInfo[]>([]);
-  const [loadingPensionTypes, setLoadingPensionTypes] = useState(true);
-  const [standardDocNames, setStandardDocNames] = useState<string[]>([]); // Для AdditionalInfoStep
-  const [requiredDocsForType, setRequiredDocsForType] = useState<DocumentDetail[]>([]); // Документы для выбранного типа пенсии
+  const [benefitTypes, setBenefitTypes] = useState<BenefitTypeInfo[]>([]);
+  const [loadingBenefitTypes, setLoadingBenefitTypes] = useState(true);
+  const [standardDocNames, setStandardDocNames] = useState<string[]>([]);
+  const [requiredDocsForType, setRequiredDocsForType] = useState<DocumentDetail[]>([]);
 
-
-  // Загрузка типов пенсий при монтировании
+  // Загрузка типов льгот при монтировании
   useEffect(() => {
     const fetchInitialData = async () => {
-      setLoadingPensionTypes(true);
+      setLoadingBenefitTypes(true);
       try {
-        const types = await getPensionTypes();
-        setPensionTypes(types);
+        const types = await getBenefitTypes();
+        setBenefitTypes(types);
         const stdNames = await getStandardDocumentNames();
         setStandardDocNames(stdNames);
       } catch (error) {
         console.error("Error fetching initial data for form:", error);
         antdMessage.error('Ошибка загрузки справочников для формы.');
       } finally {
-        setLoadingPensionTypes(false);
+        setLoadingBenefitTypes(false);
       }
     };
     fetchInitialData();
   }, []);
 
-  const selectedPensionTypeRHF = watch('pension_type');
+  const selectedBenefitTypeRHF = watch('benefit_type');
 
   useEffect(() => {
-    if (selectedPensionTypeRHF) {
+    if (selectedBenefitTypeRHF) {
       const fetchReqDocs = async () => {
         try {
-          const docs = await getPensionDocuments(selectedPensionTypeRHF);
+          const docs = await getBenefitDocuments(selectedBenefitTypeRHF);
           setRequiredDocsForType(docs);
         } catch (error) {
           console.error("Error fetching required documents:", error);
@@ -159,41 +151,38 @@ const HomePage: React.FC = () => {
     } else {
       setRequiredDocsForType([]);
     }
-  }, [selectedPensionTypeRHF]);
+  }, [selectedBenefitTypeRHF]);
 
   const steps = [
     {
-      title: 'Тип пенсии',
-      icon: <SolutionOutlined />,
+      title: 'Тип поддержки',
+      icon: <GiftOutlined />,
       content: (
         <Controller
-          name="pension_type"
+          name="benefit_type"
           control={control}
-          rules={{ required: 'Пожалуйста, выберите тип пенсии!' }}
+          rules={{ required: 'Пожалуйста, выберите тип поддержки!' }}
           render={({ field }) => (
-            <PensionTypeStep
+            <BenefitTypeStep
               form={antdForm}
-              pensionTypes={pensionTypes}
-              loadingPensionTypes={loadingPensionTypes}
+              benefitTypes={benefitTypes}
+              loadingBenefitTypes={loadingBenefitTypes}
               currentValue={field.value}
               onChange={(value) => {
                 field.onChange(value);
-                // Сброс зависимых полей при смене типа пенсии
                 setValue('work_experience', initialRHFValues.work_experience, { shouldValidate: true });
                 setValue('disability', initialRHFValues.disability, { shouldValidate: true });
                 setValue('pension_points', initialRHFValues.pension_points, { shouldValidate: true });
-                // Также сбросим поля из AdditionalInfoStep, которые могли быть заполнены
                 setValue('benefits', initialRHFValues.benefits, { shouldValidate: false });
-                setValue('documents', initialRHFValues.documents, { shouldValidate: false }); // это submitted_documents в RHF
+                setValue('documents', initialRHFValues.documents, { shouldValidate: false });
                 setValue('other_documents_extracted_data', initialRHFValues.other_documents_extracted_data, { shouldValidate: false });
-                // Пересчитываем видимые шаги и валидируем форму
                 trigger();
               }}
             />
           )}
         />
       ),
-      fieldsToValidate: ['pension_type'],
+      fieldsToValidate: ['benefit_type'],
     },
     {
       title: 'Документы (OCR)',
@@ -263,7 +252,7 @@ const HomePage: React.FC = () => {
         <AdditionalInfoStep
           control={control}
           errors={rhfErrors}
-          pensionType={selectedPensionTypeRHF || null}
+          benefitType={selectedBenefitTypeRHF || null}
           setValue={setValue}
           getValues={getValues}
           trigger={trigger}
@@ -271,7 +260,7 @@ const HomePage: React.FC = () => {
           requiredDocsForType={requiredDocsForType}
         />
       ),
-      fieldsToValidate: selectedPensionTypeRHF === 'retirement_standard' ? ['pension_points'] : [],
+      fieldsToValidate: selectedBenefitTypeRHF === 'retirement_standard' ? ['pension_points'] : [],
     },
     {
       title: 'Сводка и отправка',
@@ -281,17 +270,16 @@ const HomePage: React.FC = () => {
   ];
 
   const getVisibleSteps = () => {
-    const pensionType = watch('pension_type');
+    const benefitType = watch('benefit_type');
     let visibleStepsConfig = [steps[0]];
 
     visibleStepsConfig.push(steps[1]);
-
     visibleStepsConfig.push(steps[2]);
 
-    if (pensionType === 'retirement_standard' || pensionType === 'retirement_early_teacher' || pensionType === 'retirement_early_north' || pensionType === 'disability_insurance') {
+    if (benefitType === 'retirement_standard' || benefitType === 'retirement_early_teacher' || benefitType === 'retirement_early_north' || benefitType === 'disability_insurance') {
       visibleStepsConfig.push(steps[3]);
     }
-    if (pensionType === 'disability_social' || pensionType === 'disability_insurance') {
+    if (benefitType === 'disability_social' || benefitType === 'disability_insurance') {
       visibleStepsConfig.push(steps[4]);
     }
 
@@ -305,9 +293,8 @@ const HomePage: React.FC = () => {
   const activeStepContent = currentVisibleSteps[currentStep]?.content;
   let activeStepFieldsToValidate = currentVisibleSteps[currentStep]?.fieldsToValidate as string[] | undefined;
   if (currentVisibleSteps[currentStep]?.title === 'Доп. информация') {
-    activeStepFieldsToValidate = selectedPensionTypeRHF === 'retirement_standard' ? ['pension_points'] : [];
+    activeStepFieldsToValidate = selectedBenefitTypeRHF === 'retirement_standard' ? ['pension_points'] : [];
   }
-
 
   const next = async () => {
     let isValid = true;
@@ -331,9 +318,8 @@ const HomePage: React.FC = () => {
     setSubmissionResult(null);
     setFinalCaseStatus(null);
 
-    // Маппинг данных из CaseFormDataTypeForRHF в CaseDataInput (API)
     const apiPayload: CaseDataInput = {
-        pension_type: data.pension_type!, 
+        benefit_type: data.benefit_type!, 
         personal_data: {
             last_name: data.personal_data!.last_name!,
             first_name: data.personal_data!.first_name!,
@@ -347,8 +333,6 @@ const HomePage: React.FC = () => {
                                 : null,
             dependents: data.personal_data!.dependents || 0,
         },
-        // Если disability есть, но group или date отсутствуют, то это невалидный объект для API.
-        // Передаем null, если объект неполный.
         disability: (data.disability && data.disability.group && data.disability.date) 
                         ? data.disability as DisabilityInfo 
                         : null,
@@ -363,9 +347,6 @@ const HomePage: React.FC = () => {
         benefits: data.benefits ? data.benefits.split(',').map((s: string) => s.trim()).filter(Boolean) : [],
         submitted_documents: data.documents ? data.documents.split(',').map((s: string) => s.trim()).filter(Boolean) : [],
         has_incorrect_document: data.has_incorrect_document || false,
-        // Фильтруем other_documents_extracted_data, чтобы убедиться, что все элементы соответствуют OtherDocumentData
-        // Поля в OtherDocumentData (кроме extracted_fields) все nullable, так что Partial<OtherDocumentData> подходит, если extracted_fields тоже null или объект.
-        // Главное, чтобы сам объект other_documents_extracted_data был массивом OtherDocumentData[]
         other_documents_extracted_data: data.other_documents_extracted_data
             ? data.other_documents_extracted_data.filter(
                 doc => doc && (doc.identified_document_type || doc.standardized_document_type)
@@ -375,7 +356,7 @@ const HomePage: React.FC = () => {
                 extracted_fields: doc.extracted_fields || null,
                 multimodal_assessment: doc.multimodal_assessment || null,
                 text_llm_reasoning: doc.text_llm_reasoning || null,
-            } as OtherDocumentData)) // Приведение типа к OtherDocumentData
+            } as OtherDocumentData))
             : [],
     };
     
@@ -392,11 +373,10 @@ const HomePage: React.FC = () => {
     } catch (err) {
       const apiErr = err as ApiError;
       console.error('Form submission error:', apiErr);
-      let errorMessageText = apiErr.message || 'Произошла ошибка при отправке дела.';
+      let errorMessageText = apiErr.message || 'Произошла ошибка при отправке обращения.';
       if (apiErr.validationDetails && Array.isArray(apiErr.validationDetails)) {
         const fieldsErrors = apiErr.validationDetails.map(detail => {
             let fieldPath = (detail as any).field?.replace(/^body\./, '') || (detail as any).loc?.slice(1).join('.');
-            // Проверяем наличие msg или message
             const message = (detail as any).msg || (detail as any).message || 'Неизвестная ошибка поля';
             return `${fieldPath}: ${message}`;
         }).join('; ');
@@ -422,13 +402,13 @@ const HomePage: React.FC = () => {
             setPollingCaseId(null);
             if (intervalId) clearInterval(intervalId);
             setLoading(false);
-            antdMessage.success(`Обработка дела #${statusResult.case_id} завершена. Статус: ${statusResult.final_status}`);
+            antdMessage.success(`Обработка обращения #${statusResult.case_id} завершена. Статус: ${statusResult.final_status}`);
           } else {
             setSubmissionResult(statusResult);
           }
         } catch (error) {
           console.error('Polling error:', error);
-          antdMessage.warning('Ошибка при опросе статуса дела. Поллинг будет продолжен.');
+          antdMessage.warning('Ошибка при опросе статуса обращения. Поллинг будет продолжен.');
         }
       };
       pollStatus();
@@ -439,7 +419,6 @@ const HomePage: React.FC = () => {
       if (pollingCaseId) setLoading(false);
     };
   }, [pollingCaseId]);
-
 
   const resetFormAndState = () => {
     rhfReset(initialRHFValues);
@@ -458,11 +437,11 @@ const HomePage: React.FC = () => {
     return (
       <Result
         status={finalCaseStatus.final_status.toLowerCase().includes('соответствует') ? 'success' : finalCaseStatus.final_status.toLowerCase().includes('не соответствует') ? 'error' : 'info'}
-        title={`Обработка дела завершена`}
-        subTitle={`Статус дела ID ${finalCaseStatus.case_id}: ${finalCaseStatus.final_status}`}
+        title={`Обработка обращения завершена`}
+        subTitle={`Статус обращения ID ${finalCaseStatus.case_id}: ${finalCaseStatus.final_status}`}
         extra={[
           <Button type="primary" key="new" onClick={resetFormAndState}>
-            Создать новое дело
+            Создать новое обращение
           </Button>,
         ]}
       >
@@ -476,7 +455,7 @@ const HomePage: React.FC = () => {
   if (submissionResult && pollingCaseId) {
     return (
       <div style={{ textAlign: 'center', padding: '50px' }}>
-        <Spin indicator={<LoadingOutlined style={{ fontSize: 48 }} spin />} tip={`Дело #${submissionResult.case_id} принято в обработку. Ожидаем результат...`} size="large" />
+        <Spin indicator={<LoadingOutlined style={{ fontSize: 48 }} spin />} tip={`Обращение #${submissionResult.case_id} принято в обработку. Ожидаем результат...`} size="large" />
         <Typography.Paragraph style={{ marginTop: 20 }}>
             Текущий статус: <Tag color="blue">{submissionResult.final_status}</Tag>
         </Typography.Paragraph>
@@ -491,7 +470,7 @@ const HomePage: React.FC = () => {
     <FormProvider {...rhfMethods}>
         <Card style={{ maxWidth: '1000px', margin: '20px auto' }}>
         <Title level={2} style={{ textAlign: 'center', marginBottom: '30px' }}>
-            Создание нового пенсионного дела
+            Создание нового обращения
         </Title>
         <Steps 
           current={currentStep} 
@@ -503,7 +482,7 @@ const HomePage: React.FC = () => {
         <Form
             form={antdForm}
             layout="vertical"
-            name="pension_case_form_rhf"
+            name="benefit_case_form_rhf"
             onFinish={handleSubmit(handleFormSubmitRHF)}
         >
             <Spin spinning={loading && currentStep === currentVisibleSteps.length -1} tip="Отправка данных...">
@@ -539,7 +518,7 @@ const HomePage: React.FC = () => {
                 )}
                 {currentStep === currentVisibleSteps.length - 1 && (
                 <Button type="primary" htmlType="submit" loading={loading}> 
-                    Отправить дело
+                    Отправить обращение
                 </Button>
                 )}
             </Col>

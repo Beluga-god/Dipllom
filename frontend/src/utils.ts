@@ -1,6 +1,5 @@
 import { format, isValid } from 'date-fns';
-// import { CaseFormDataType, WorkRecordType } from './components/CaseForm'; // Будет заменено на импорт из ../types
-import { CaseFormDataTypeForRHF, CaseDataInput, PersonalData, OtherDocumentData } from './types'; // Импорт из нового файла
+import { CaseFormDataTypeForRHF, CaseDataInput, PersonalData, OtherDocumentData } from './types';
 
 // Вспомогательная функция для форматирования Date в YYYY-MM-DD
 export const formatDateForInput = (date: Date | null | undefined): string => {
@@ -18,7 +17,7 @@ export const prepareDataForApi = (formData: CaseFormDataTypeForRHF): CaseDataInp
     snils: formData.personal_data?.snils || '',
     gender: formData.personal_data?.gender || '',
     citizenship: formData.personal_data?.citizenship || '',
-    dependents: typeof formData.personal_data?.dependents === 'number' ? formData.personal_data.dependents : 0, // Обеспечиваем тип number, исправлен баг с расположением
+    dependents: typeof formData.personal_data?.dependents === 'number' ? formData.personal_data.dependents : 0,
     name_change_info: (formData.personal_data?.name_change_info?.old_full_name || formData.personal_data?.name_change_info?.date_changed) && formData.personal_data?.name_change_info
             ? {
                 old_full_name: formData.personal_data.name_change_info.old_full_name,
@@ -29,16 +28,15 @@ export const prepareDataForApi = (formData: CaseFormDataTypeForRHF): CaseDataInp
 
   // Очищаем other_documents_extracted_data, оставляя только нужные поля
   const sanitizedOtherDocumentsData = formData.other_documents_extracted_data?.map(doc => {
-    const newDoc: Partial<OtherDocumentData> = {}; // Используем Partial т.к. можем не все поля заполнять
+    const newDoc: Partial<OtherDocumentData> = {};
     if (doc.standardized_document_type) {
       newDoc.standardized_document_type = doc.standardized_document_type;
     }
     if (doc.extracted_fields) {
       newDoc.extracted_fields = doc.extracted_fields;
     }
-    // Можно добавить и другие поля из OtherDocumentData при необходимости
-    return newDoc as OtherDocumentData; // Приводим к OtherDocumentData, если уверены в структуре
-  }).filter(Boolean) as OtherDocumentData[] | undefined; // Фильтруем null/undefined и приводим тип
+    return newDoc as OtherDocumentData;
+  }).filter(Boolean) as OtherDocumentData[] | undefined;
 
   // Подготовка work_experience
   const workExperienceData = formData.work_experience ? {
@@ -51,17 +49,16 @@ export const prepareDataForApi = (formData: CaseFormDataTypeForRHF): CaseDataInp
   } : null;
 
   const dataToSend: CaseDataInput = {
-    pension_type: formData.pension_type || '', // Обеспечиваем наличие значения
+    benefit_type: formData.benefit_type || '',
     personal_data: apiPersonalData,
     work_experience: workExperienceData,
     pension_points: formData.pension_points || null,
     benefits: (formData.benefits || '').split(',').map((s: string) => s.trim()).filter(Boolean),
-    // Для submitted_documents теперь используется submitted_documents, а не documents
-    submitted_documents: (formData.submitted_documents || '').split(',').map((s: string) => s.trim()).filter(Boolean),
+    submitted_documents: (formData.documents || '').split(',').map((s: string) => s.trim()).filter(Boolean),
     has_incorrect_document: formData.has_incorrect_document || null,
     disability: formData.disability 
-        ? { // Обеспечиваем структуру DisabilityInfo
-            group: formData.disability.group || "1", // Пример значения по умолчанию
+        ? {
+            group: formData.disability.group || "1",
             date: formData.disability.date || '',
             cert_number: formData.disability.cert_number || null
           }
@@ -69,4 +66,4 @@ export const prepareDataForApi = (formData: CaseFormDataTypeForRHF): CaseDataInp
     other_documents_extracted_data: sanitizedOtherDocumentsData || null
   };
   return dataToSend;
-}; 
+};

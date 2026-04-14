@@ -1,3 +1,4 @@
+// src/pages/RagDocumentsPage.tsx
 import React, { useState, useEffect, useCallback } from 'react';
 import { List, Button, Upload, message, Typography, Spin, Popconfirm, Alert, Space } from 'antd';
 import { UploadOutlined, DeleteOutlined, FilePdfOutlined, QuestionCircleOutlined } from '@ant-design/icons';
@@ -31,8 +32,8 @@ const RagDocumentsPage: React.FC = () => {
             setDocuments(response.filenames || []);
         } catch (e) {
             const apiError = e as ApiError;
-            setError(apiError.message || 'Не удалось загрузить список документов.');
-            message.error(apiError.message || 'Не удалось загрузить список документов.');
+            setError(apiError.message || 'Не удалось загрузить список нормативных документов.');
+            message.error(apiError.message || 'Не удалось загрузить список нормативных документов.');
         } finally {
             setIsLoading(false);
         }
@@ -56,7 +57,7 @@ const RagDocumentsPage: React.FC = () => {
             const response: DocumentUploadResponse = await uploadRagDocument(file as RcFile);
             message.success(response.message || `Файл ${response.filename} успешно загружен.`);
             onSuccess(response, file);
-            fetchDocuments(); // Refresh the list
+            fetchDocuments();
         } catch (e) {
             const apiError = e as ApiError;
             setError(apiError.message || `Не удалось загрузить файл ${file.name}.`);
@@ -64,7 +65,7 @@ const RagDocumentsPage: React.FC = () => {
             onError(apiError);
         } finally {
             setIsUploading(false);
-            setFileList([]); // Clear file list after attempt
+            setFileList([]);
         }
     };
 
@@ -73,12 +74,12 @@ const RagDocumentsPage: React.FC = () => {
             message.error("У вас нет прав для удаления документов.");
             return;
         }
-        setIsLoading(true); // Можно использовать isDeleting, если нужно более гранулированно
+        setIsLoading(true);
         setError(null);
         try {
             const response: DocumentDeleteResponse = await deleteRagDocument(filename);
             message.success(response.message || `Файл ${filename} успешно удален.`);
-            fetchDocuments(); // Refresh the list
+            fetchDocuments();
         } catch (e) {
             const apiError = e as ApiError;
             setError(apiError.message || `Не удалось удалить файл ${filename}.`);
@@ -100,12 +101,12 @@ const RagDocumentsPage: React.FC = () => {
             if (!isPdf) {
                 message.error('Вы можете загружать только PDF файлы!');
             }
-            const isLt10M = file.size / 1024 / 1024 < 10; // Пример ограничения размера, можно настроить
+            const isLt10M = file.size / 1024 / 1024 < 10;
             if (!isLt10M) {
                 message.error('Файл должен быть меньше 10MB!');
             }
             if (isPdf && isLt10M) {
-                 setFileList([file]); // Заменяем текущий файл в списке
+                 setFileList([file]);
             } else {
                 setFileList([]);
             }
@@ -117,7 +118,7 @@ const RagDocumentsPage: React.FC = () => {
         maxCount: 1,
     };
 
-    if (!isAdmin && !isLoading) { // Если уже не грузится и точно не админ
+    if (!isAdmin && !isLoading) {
         return (
             <Alert
                 message="Доступ запрещен"
@@ -130,15 +131,15 @@ const RagDocumentsPage: React.FC = () => {
     
     return (
         <div style={{ padding: '24px' }}>
-            <Title level={2} style={{ marginBottom: '24px' }}>Управление RAG Документами</Title>
+            <Title level={2} style={{ marginBottom: '24px' }}>Управление базой знаний</Title>
             <Text type="secondary" style={{display: 'block', marginBottom: '16px'}}>
-                На этой странице администраторы могут управлять документами, используемыми для базы знаний системы.
-                Загруженные PDF файлы будут обработаны и добавлены в RAG.
+                На этой странице администраторы могут управлять нормативными документами (законы, указы, постановления),
+                используемыми для базы знаний системы. Загруженные PDF файлы будут обработаны и добавлены в RAG-движок.
             </Text>
 
             {isAdmin && (
                 <div style={{ marginBottom: '24px' }}>
-                    <Title level={4}>Загрузить новый документ</Title>
+                    <Title level={4}>Загрузить нормативный документ</Title>
                     <Upload {...uploadProps}>
                         <Button icon={<UploadOutlined />} loading={isUploading} disabled={isUploading}>
                             Выбрать PDF файл для загрузки
@@ -150,11 +151,11 @@ const RagDocumentsPage: React.FC = () => {
 
             {error && <Alert message={error} type="error" showIcon style={{ marginBottom: '16px' }} />}
 
-            <Title level={4} style={{ marginTop: '24px' }}>Список загруженных документов</Title>
+            <Title level={4} style={{ marginTop: '24px' }}>Загруженные нормативные документы</Title>
             {isLoading ? (
                 <Spin tip="Загрузка списка документов..." />
             ) : documents.length === 0 && !error && isAdmin ? (
-                <Text>Нет загруженных документов.</Text>
+                <Text>Нет загруженных нормативных документов.</Text>
             ) : (
                 <List
                     bordered
@@ -187,4 +188,4 @@ const RagDocumentsPage: React.FC = () => {
     );
 };
 
-export default RagDocumentsPage; 
+export default RagDocumentsPage;

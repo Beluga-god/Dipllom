@@ -14,7 +14,7 @@ import {
   Tooltip,
   Space,
   Modal,
-  message as antdMessage, // Для уведомлений о скачивании
+  message as antdMessage,
   Empty,
 } from 'antd';
 import {
@@ -27,6 +27,7 @@ import {
   FileWordOutlined,
   DeleteOutlined,
   ExclamationCircleFilled,
+  GiftOutlined,
 } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
 import { getCaseHistory, downloadCaseDocument, deleteCase } from '../services/apiClient';
@@ -38,7 +39,20 @@ const { Title, Text } = Typography;
 const { Search } = Input;
 const { confirm } = Modal;
 
-const ITEMS_PER_PAGE = 10; // Количество элементов на одной странице таблицы
+const ITEMS_PER_PAGE = 10;
+
+// Маппинг ID типа льготы в читаемое название
+const getBenefitTypeDisplayName = (benefitTypeId: string): string => {
+  const benefitTypeMap: Record<string, string> = {
+    'monthly_payment': 'Ежемесячная выплата',
+    'housing_benefits': 'Жилищные льготы',
+    'medical_support': 'Медицинская помощь',
+    'educational_benefits': 'Образовательные льготы',
+    'tax_benefits': 'Налоговые льготы',
+    'land_benefits': 'Земельный участок',
+  };
+  return benefitTypeMap[benefitTypeId] || benefitTypeId;
+};
 
 const CaseHistoryPage: React.FC = () => {
   const { user } = useAuth();
@@ -48,26 +62,17 @@ const CaseHistoryPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState<string>('');
 
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [totalItems, setTotalItems] = useState<number>(0); // Пока не используется, т.к. API не возвращает total
+  const [totalItems, setTotalItems] = useState<number>(0);
 
   const fetchHistory = useCallback(async (page: number, currentSearchTerm: string) => {
     setLoading(true);
     setError(null);
     try {
-      // API пока не поддерживает серверную пагинацию и поиск по тексту,
-      // поэтому загружаем все и фильтруем/пагинируем на клиенте.
-      // Если бы API поддерживал, параметры skip/limit и search передавались бы сюда.
-      // const skip = (page - 1) * ITEMS_PER_PAGE;
-      // const limit = ITEMS_PER_PAGE;
-      // В данном API /history имеет skip и limit, но не имеет поиска по тексту.
-      // Загрузим больше данных, чтобы было что фильтровать на клиенте, если нужно.
-      // Для реального приложения с большим количеством данных нужна серверная фильтрация/пагинация.
-      const data = await getCaseHistory(0, 100); // Загружаем первые 100 для примера
+      const data = await getCaseHistory(0, 100);
       setHistoryData(data);
-      // setTotalItems(data.length); // Если бы API не возвращал все, а только страницу
     } catch (err) {
       const apiErr = err as ApiError;
-      setError(apiErr.message || 'Не удалось загрузить историю дел.');
+      setError(apiErr.message || 'Не удалось загрузить историю обращений.');
       console.error('Error fetching case history:', apiErr);
       setHistoryData([]);
     } finally {
@@ -77,12 +82,11 @@ const CaseHistoryPage: React.FC = () => {
 
   useEffect(() => {
     fetchHistory(currentPage, searchTerm);
-  }, [fetchHistory, currentPage]); // searchTerm пока не используется в fetchHistory
+  }, [fetchHistory, currentPage]);
 
   const handleSearch = (value: string) => {
     setSearchTerm(value);
-    setCurrentPage(1); // Сбрасываем на первую страницу при поиске
-    // Перезагрузка данных не нужна, если фильтрация клиентская
+    setCurrentPage(1);
   };
 
   const handleTableChange = (pagination: any) => {
@@ -91,16 +95,14 @@ const CaseHistoryPage: React.FC = () => {
 
   const handleDownload = async (caseId: number, format: DocumentFormat) => {
     const key = `download-${caseId}-${format}`;
-    antdMessage.loading({ content: `Загрузка ${format.toUpperCase()} для дела #${caseId}...`, key, duration: 0 });
+    antdMessage.loading({ content: `Загрузка ${format.toUpperCase()} для обращения #${caseId}...`, key, duration: 0 });
 
     try {
       const blob = await downloadCaseDocument(caseId, format);
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      // Имя файла лучше получать из заголовка Content-Disposition, если бэкенд его отдает
-      // Пока используем стандартное имя
-      const filename = `case_document_${caseId}.${format}`;
+      const filename = `svo_case_${caseId}.${format}`;
       link.setAttribute('download', filename);
       document.body.appendChild(link);
       link.click();
@@ -116,18 +118,17 @@ const CaseHistoryPage: React.FC = () => {
 
   const showDeleteConfirm = (caseId: number) => {
     confirm({
-      title: 'Вы уверены, что хотите удалить это дело?',
+      title: 'Вы уверены, что хотите удалить это обращение?',
       icon: <ExclamationCircleFilled />,
-      content: `Дело #${caseId} будет удалено без возможности восстановления.`,
+      content: `Обращение #${caseId} будет удалено без возможности восстановления.`,
       okText: 'Да, удалить',
       okType: 'danger',
       cancelText: 'Отмена',
       onOk: async () => {
         try {
-          antdMessage.loading({ content: `Удаление дела #${caseId}...`, key: `delete-${caseId}` });
+          antdMessage.loading({ content: `Удаление обращения #${caseId}...`, key: `delete-${caseId}` });
           await deleteCase(caseId);
-          antdMessage.success({ content: `Дело #${caseId} успешно удалено.`, key: `delete-${caseId}` });
-          // Обновляем список дел после удаления
+          antdMessage.success({ content: `Обращение #${caseId} успешно удалено.`, key: `delete-${caseId}` });
           fetchHistory(currentPage, searchTerm);
         } catch (err) {
           const apiErr = err as ApiError;
@@ -147,21 +148,22 @@ const CaseHistoryPage: React.FC = () => {
       const fio = entry.personal_data ?
         `${entry.personal_data.last_name || ''} ${entry.personal_data.first_name || ''} ${entry.personal_data.middle_name || ''}`.toLowerCase() : '';
       const snils = entry.personal_data?.snils?.replace(/\D/g, '') || '';
+      const benefitTypeDisplay = getBenefitTypeDisplayName(entry.benefit_type).toLowerCase();
 
       return (
         entry.id.toString().includes(lowerSearchTerm) ||
         fio.includes(lowerSearchTerm) ||
         (snils && snils.includes(lowerSearchTerm.replace(/\D/g, ''))) ||
-        entry.pension_type.toLowerCase().includes(lowerSearchTerm) ||
+        benefitTypeDisplay.includes(lowerSearchTerm) ||
+        entry.benefit_type.toLowerCase().includes(lowerSearchTerm) ||
         entry.final_status.toLowerCase().includes(lowerSearchTerm)
       );
     });
   }, [historyData, searchTerm]);
 
-
   const columns = [
     {
-      title: 'ID Дела',
+      title: 'ID Обращения',
       dataIndex: 'id',
       key: 'id',
       sorter: (a: CaseHistoryEntry, b: CaseHistoryEntry) => a.id - b.id,
@@ -189,10 +191,10 @@ const CaseHistoryPage: React.FC = () => {
       render: (_: any, record: CaseHistoryEntry) => record.personal_data?.snils || <Text type="secondary">Нет данных</Text>,
     },
     {
-      title: 'Тип пенсии',
-      dataIndex: 'pension_type',
-      key: 'pension_type',
-      // Можно добавить фильтры, если типы пенсий известны и их немного
+      title: 'Тип поддержки',
+      dataIndex: 'benefit_type',
+      key: 'benefit_type',
+      render: (benefitType: string) => getBenefitTypeDisplayName(benefitType),
     },
     {
       title: 'Итоговый статус',
@@ -206,10 +208,9 @@ const CaseHistoryPage: React.FC = () => {
         else if (status.toLowerCase().includes('failed') || status.toLowerCase().includes('error')) color = 'error';
         return <Tag color={color}>{status}</Tag>;
       },
-      // filters: [ ...список статусов... ], onFilter: (value, record) => record.final_status.indexOf(value) === 0,
     },
     {
-      title: 'Уверенность RAG',
+      title: 'Уверенность системы',
       dataIndex: 'rag_confidence',
       key: 'rag_confidence',
       render: (confidence: number | null) => confidence !== null ? `${(confidence * 100).toFixed(1)}%` : <Text type="secondary">-</Text>,
@@ -221,20 +222,20 @@ const CaseHistoryPage: React.FC = () => {
       align: 'center' as const,
       render: (_: any, record: CaseHistoryEntry) => (
         <Space size="small">
-          <Tooltip title="Просмотреть детали дела">
+          <Tooltip title="Просмотреть детали обращения">
             <Link to={`/history/${record.id}`}>
               <Button icon={<EyeOutlined />} size="small" />
             </Link>
           </Tooltip>
-          <Tooltip title="Скачать PDF">
+          <Tooltip title="Скачать заключение (PDF)">
             <Button
               icon={<FilePdfOutlined />}
               size="small"
               onClick={() => handleDownload(record.id, 'pdf')}
-              disabled={record.final_status === "PROCESSING"} // Пример: не даем скачать, если в обработке
+              disabled={record.final_status === "PROCESSING"}
             />
           </Tooltip>
-          <Tooltip title="Скачать DOCX">
+          <Tooltip title="Скачать заключение (DOCX)">
             <Button
               icon={<FileWordOutlined />}
               size="small"
@@ -243,7 +244,7 @@ const CaseHistoryPage: React.FC = () => {
             />
           </Tooltip>
           {(user?.role === 'admin' || user?.role === 'manager') && (
-            <Tooltip title="Удалить дело">
+            <Tooltip title="Удалить обращение">
               <Button
                 icon={<DeleteOutlined />}
                 size="small"
@@ -257,10 +258,10 @@ const CaseHistoryPage: React.FC = () => {
     },
   ];
 
-  if (loading && historyData.length === 0) { // Спиннер на всю страницу только при первой загрузке
+  if (loading && historyData.length === 0) {
     return (
       <div style={{ textAlign: 'center', padding: '50px' }}>
-        <Spin size="large" tip="Загрузка истории дел..." />
+        <Spin size="large" tip="Загрузка истории обращений..." />
       </div>
     );
   }
@@ -271,7 +272,7 @@ const CaseHistoryPage: React.FC = () => {
         <Col>
           <Title level={3} style={{ margin: 0 }}>
             <HistoryOutlined style={{ marginRight: 8 }} />
-            История обработанных дел
+            История обращений
           </Title>
         </Col>
         <Col>
@@ -282,19 +283,19 @@ const CaseHistoryPage: React.FC = () => {
       </Row>
 
       <Search
-        placeholder="Поиск по ID, ФИО, СНИЛС, типу пенсии или статусу..."
+        placeholder="Поиск по ID, ФИО, СНИЛС, типу поддержки или статусу..."
         allowClear
         enterButton={<Button icon={<SearchOutlined />}>Поиск</Button>}
         size="large"
         onSearch={handleSearch}
-        onChange={(e) => { if(!e.target.value) handleSearch('');}} // Очистка поиска при пустом инпуте
+        onChange={(e) => { if(!e.target.value) handleSearch('');}}
         style={{ marginBottom: 24 }}
-        loading={loading && searchTerm !== ''} // Показываем загрузку на кнопке поиска если фильтрация серверная
+        loading={loading && searchTerm !== ''}
       />
 
       {error && (
         <Alert
-          message="Ошибка загрузки истории дел"
+          message="Ошибка загрузки истории обращений"
           description={error}
           type="error"
           showIcon
@@ -310,13 +311,13 @@ const CaseHistoryPage: React.FC = () => {
         pagination={{
           current: currentPage,
           pageSize: ITEMS_PER_PAGE,
-          total: filteredData.length, // Общее количество элементов после фильтрации для клиентской пагинации
+          total: filteredData.length,
           showSizeChanger: true,
           pageSizeOptions: ['10', '20', '50'],
         }}
         onChange={handleTableChange}
-        scroll={{ x: 1200 }} // Горизонтальный скролл для маленьких экранов
-        locale={{ emptyText: <Empty description="Дела не найдены или соответствуют фильтру."/> }}
+        scroll={{ x: 1200 }}
+        locale={{ emptyText: <Empty description="Обращения не найдены или соответствуют фильтру."/> }}
       />
     </Card>
   );

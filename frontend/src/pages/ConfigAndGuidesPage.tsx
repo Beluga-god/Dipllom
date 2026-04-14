@@ -15,12 +15,12 @@ import {
   Collapse,
 } from 'antd';
 import {
-  getPensionTypes,
-  getPensionDocuments,
+  getBenefitTypes,
+  getBenefitDocuments,
   getStandardDocumentNames,
 } from '../services/apiClient';
 import type {
-  PensionTypeInfo,
+  BenefitTypeInfo,
   DocumentDetail,
   ApiError,
 } from '../types';
@@ -29,8 +29,8 @@ const { Title, Text, Paragraph } = Typography;
 const { Panel } = Collapse;
 
 const ConfigAndGuidesPage: React.FC = () => {
-  const [pensionTypes, setPensionTypes] = useState<PensionTypeInfo[]>([]);
-  const [selectedPensionTypeId, setSelectedPensionTypeId] = useState<string | undefined>(undefined);
+  const [benefitTypes, setBenefitTypes] = useState<BenefitTypeInfo[]>([]);
+  const [selectedBenefitTypeId, setSelectedBenefitTypeId] = useState<string | undefined>(undefined);
   const [requiredDocuments, setRequiredDocuments] = useState<DocumentDetail[]>([]);
   const [standardDocNames, setStandardDocNames] = useState<string[]>([]);
 
@@ -42,21 +42,21 @@ const ConfigAndGuidesPage: React.FC = () => {
   const [errorDocs, setErrorDocs] = useState<string | null>(null);
   const [errorStandardNames, setErrorStandardNames] = useState<string | null>(null);
 
-  // Загрузка типов пенсий
+  // Загрузка типов льгот
   useEffect(() => {
     const fetchTypes = async () => {
       setLoadingTypes(true);
       setErrorTypes(null);
       try {
-        const data = await getPensionTypes();
-        setPensionTypes(data);
+        const data = await getBenefitTypes();
+        setBenefitTypes(data);
         if (data.length > 0) {
-         // setSelectedPensionTypeId(data[0].id); // Автоматически выбираем первый тип
+          // setSelectedBenefitTypeId(data[0].id); // Автоматически выбираем первый тип (раскомментировать при необходимости)
         }
       } catch (err) {
         const apiErr = err as ApiError;
-        setErrorTypes(apiErr.message || 'Не удалось загрузить типы пенсий.');
-        console.error('Error fetching pension types:', apiErr);
+        setErrorTypes(apiErr.message || 'Не удалось загрузить типы льгот.');
+        console.error('Error fetching benefit types:', apiErr);
       } finally {
         setLoadingTypes(false);
       }
@@ -64,29 +64,29 @@ const ConfigAndGuidesPage: React.FC = () => {
     fetchTypes();
   }, []);
 
-  // Загрузка документов для выбранного типа пенсии
+  // Загрузка документов для выбранного типа льготы
   useEffect(() => {
-    if (selectedPensionTypeId) {
+    if (selectedBenefitTypeId) {
       const fetchDocs = async () => {
         setLoadingDocs(true);
         setErrorDocs(null);
-        setRequiredDocuments([]); // Очищаем перед загрузкой
+        setRequiredDocuments([]);
         try {
-          const data = await getPensionDocuments(selectedPensionTypeId);
+          const data = await getBenefitDocuments(selectedBenefitTypeId);
           setRequiredDocuments(data);
         } catch (err) {
           const apiErr = err as ApiError;
           setErrorDocs(apiErr.message || 'Не удалось загрузить список документов.');
-          console.error('Error fetching pension documents:', apiErr);
+          console.error('Error fetching benefit documents:', apiErr);
         } finally {
           setLoadingDocs(false);
         }
       };
       fetchDocs();
     } else {
-      setRequiredDocuments([]); // Очищаем, если тип не выбран
+      setRequiredDocuments([]);
     }
-  }, [selectedPensionTypeId]);
+  }, [selectedBenefitTypeId]);
 
   // Загрузка стандартных имен документов
   useEffect(() => {
@@ -107,8 +107,8 @@ const ConfigAndGuidesPage: React.FC = () => {
     fetchStandardNames();
   }, []);
 
-  const handlePensionTypeChange = (value: string) => {
-    setSelectedPensionTypeId(value);
+  const handleBenefitTypeChange = (value: string) => {
+    setSelectedBenefitTypeId(value);
   };
 
   return (
@@ -118,40 +118,40 @@ const ConfigAndGuidesPage: React.FC = () => {
       </Title>
 
       <Row gutter={[24, 24]}>
-        {/* Секция Типы пенсий и Документы */}
+        {/* Секция Типы льгот и Документы */}
         <Col xs={24} md={12}>
-          <Card title="Типы пенсий и необходимые документы">
-            {loadingTypes && <Spin tip="Загрузка типов пенсий..." />}
+          <Card title="Типы поддержки и необходимые документы">
+            {loadingTypes && <Spin tip="Загрузка типов льгот..." />}
             {errorTypes && <Alert message={errorTypes} type="error" showIcon />}
-            {!loadingTypes && !errorTypes && pensionTypes.length > 0 && (
+            {!loadingTypes && !errorTypes && benefitTypes.length > 0 && (
               <>
-                <Paragraph>Выберите тип пенсии, чтобы увидеть список необходимых документов:</Paragraph>
+                <Paragraph>Выберите тип поддержки, чтобы увидеть список необходимых документов:</Paragraph>
                 <Select
                   style={{ width: '100%', marginBottom: '16px' }}
-                  placeholder="Выберите тип пенсии"
-                  onChange={handlePensionTypeChange}
-                  value={selectedPensionTypeId}
+                  placeholder="Выберите тип поддержки"
+                  onChange={handleBenefitTypeChange}
+                  value={selectedBenefitTypeId}
                   loading={loadingTypes}
                   showSearch
                   optionFilterProp="children"
                   filterOption={(input, option) =>
                     (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
                   }
-                  options={pensionTypes.map(pt => ({value: pt.id, label: pt.display_name}))}
+                  options={benefitTypes.map(bt => ({value: bt.id, label: bt.display_name}))}
                 />
 
-                {selectedPensionTypeId && pensionTypes.find(pt => pt.id === selectedPensionTypeId) && (
+                {selectedBenefitTypeId && benefitTypes.find(bt => bt.id === selectedBenefitTypeId) && (
                     <Alert
                         type="info"
                         style={{marginBottom: '16px'}}
-                        message={<Text strong>{pensionTypes.find(pt => pt.id === selectedPensionTypeId)?.display_name}</Text>}
-                        description={pensionTypes.find(pt => pt.id === selectedPensionTypeId)?.description}
+                        message={<Text strong>{benefitTypes.find(bt => bt.id === selectedBenefitTypeId)?.display_name}</Text>}
+                        description={benefitTypes.find(bt => bt.id === selectedBenefitTypeId)?.description}
                     />
                 )}
 
                 {loadingDocs && <Spin tip="Загрузка документов..." />}
                 {errorDocs && <Alert message={errorDocs} type="error" showIcon />}
-                {!loadingDocs && !errorDocs && selectedPensionTypeId && (
+                {!loadingDocs && !errorDocs && selectedBenefitTypeId && (
                   requiredDocuments.length > 0 ? (
                     <List
                       itemLayout="vertical"
@@ -159,7 +159,7 @@ const ConfigAndGuidesPage: React.FC = () => {
                       renderItem={(doc: DocumentDetail) => (
                         <List.Item
                           key={doc.id}
-                          extra={ doc.is_critical ? <Tag color="red">Критичный</Tag> : <Tag color="gold">Желательный</Tag> }
+                          extra={ doc.is_critical ? <Tag color="red">Обязательный</Tag> : <Tag color="gold">Желательный</Tag> }
                         >
                           <List.Item.Meta
                             title={<Text strong>{doc.name}</Text>}
@@ -182,14 +182,14 @@ const ConfigAndGuidesPage: React.FC = () => {
                       )}
                     />
                   ) : (
-                     selectedPensionTypeId && <Empty description="Документы для этого типа пенсии не найдены или не требуются." />
+                     selectedBenefitTypeId && <Empty description="Документы для этого типа поддержки не найдены или не требуются." />
                   )
                 )}
-                {!selectedPensionTypeId && !loadingDocs && <Empty description="Выберите тип пенсии для просмотра документов." />}
+                {!selectedBenefitTypeId && !loadingDocs && <Empty description="Выберите тип поддержки для просмотра документов." />}
               </>
             )}
-             {!loadingTypes && !errorTypes && pensionTypes.length === 0 && (
-                <Empty description="Типы пенсий не найдены." />
+             {!loadingTypes && !errorTypes && benefitTypes.length === 0 && (
+                <Empty description="Типы поддержки не найдены." />
              )}
           </Card>
         </Col>

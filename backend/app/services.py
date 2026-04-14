@@ -23,52 +23,48 @@ except ImportError as e:
     import logging
     logging.warning("Markdown2 library not found. Markdown formatting will be basic. Please install with: pip install markdown2")
 
-from .models import DocumentFormat # Используем Enum и модель ошибки
-# Добавляем импорты для конфигурационных моделей, если они понадобятся для типизации
-from .config_models.config_models import PensionTypeInfo, PensionTypeDocuments, DocumentDetail
+from .models import DocumentFormat
+from .config_models.config_models import BenefitTypeInfo, BenefitTypeDocuments, DocumentDetail
 
 def mask_personal_data(personal_data: Dict[str, Any]) -> Dict[str, Any]:
     """Маскирует чувствительные персональные данные."""
     masked_data = {
         "full_name": "[ФИО СКРЫТО]",
-        "birth_date": "[ДАТА РОЖДЕНИЯ СКРЫТА]", # Используем более общую маску
+        "birth_date": "[ДАТА РОЖДЕНИЯ СКРЫТА]",
         "snils": "[СНИЛС СКРЫТ]",
-        "gender": personal_data.get("gender", "[ПОЛ СКРЫТ]"), # Если пол важен, он должен быть в personal_data
+        "gender": personal_data.get("gender", "[ПОЛ СКРЫТ]"),
         "citizenship": "[ГРАЖДАНСТВО СКРЫТО]",
         "name_change_info": {
             "old_full_name": "[ПРЕЖНЕЕ ФИО СКРЫТО]",
             "date_changed": "[ДАТА СМЕНЫ ФИО СКРЫТА]"
-        } if personal_data and personal_data.get("name_change_info") else {}, # Проверка на None для personal_data
-        "dependents": "[КОЛИЧЕСТВО ИЖДИВЕНЦЕВ СКРЫТО]" # Маскируем количество
+        } if personal_data and personal_data.get("name_change_info") else {},
+        "dependents": "[КОЛИЧЕСТВО ИЖДИВЕНЦЕВ СКРЫТО]"
     }
     return masked_data
 
-def _get_pension_type_display_name(pension_type_id: str, pension_types_config: List[PensionTypeInfo]) -> str:
-    if pension_types_config:
-        for pt in pension_types_config:
-            if pt.id == pension_type_id:
-                return pt.display_name
-    return pension_type_id # Возвращаем ID, если имя не найдено
+def _get_benefit_type_display_name(benefit_type_id: str, benefit_types_config: List[BenefitTypeInfo]) -> str:
+    if benefit_types_config:
+        for bt in benefit_types_config:
+            if bt.id == benefit_type_id:
+                return bt.display_name
+    return benefit_type_id
 
-def _get_document_display_name(doc_id: str, doc_requirements_config: Dict[str, PensionTypeDocuments], pension_type_id_for_context: Optional[str] = None) -> str:
-    # Сначала ищем в контексте конкретного типа пенсии, если он предоставлен
-    if pension_type_id_for_context and doc_requirements_config and pension_type_id_for_context in doc_requirements_config:
-        for doc_detail in doc_requirements_config[pension_type_id_for_context].documents:
+def _get_document_display_name(doc_id: str, doc_requirements_config: Dict[str, BenefitTypeDocuments], benefit_type_id_for_context: Optional[str] = None) -> str:
+    if benefit_type_id_for_context and doc_requirements_config and benefit_type_id_for_context in doc_requirements_config:
+        for doc_detail in doc_requirements_config[benefit_type_id_for_context].documents:
             if doc_detail.id == doc_id:
                 return doc_detail.name
-    # Если не найдено или контекст не дан, ищем по всем типам
     if doc_requirements_config:
-        for pt_id, reqs in doc_requirements_config.items():
+        for bt_id, reqs in doc_requirements_config.items():
             for doc_detail in reqs.documents:
                 if doc_detail.id == doc_id:
                     return doc_detail.name
-    return doc_id # Возвращаем ID, если имя не найдено
+    return doc_id
 
 def _convert_markdown_to_html_for_reportlab(md_text: str) -> str:
     """Конвертирует Markdown в HTML, подходящий для ReportLab Paragraph."""
-    # Добавим логирование входного и выходного текста
     import logging
-    logger_services = logging.getLogger(__name__) # Используем логгер текущего модуля
+    logger_services = logging.getLogger(__name__)
     logger_services.debug(f"Original Markdown for PDF: {md_text!r}")
 
     if markdown2:
@@ -88,20 +84,19 @@ def _strip_markdown_for_docx(md_text: str) -> str:
     if markdown2:
         html_text = markdown2.markdown(md_text)
         import re
-        clean_text = re.sub(r'<[^>]+>', '', html_text) # Удаляем HTML теги
+        clean_text = re.sub(r'<[^>]+>', '', html_text)
         clean_text = clean_text.replace("&nbsp;", " ").replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
         return clean_text
     else:
         text = md_text.replace("**", "").replace("__", "")\
                       .replace("*", "").replace("_", "")\
-                      .replace("\n", " ") # Заменяем переносы на пробел для DOCX
-        # Это очень грубо и не учтет списки, заголовки и т.д.
+                      .replace("\n", " ")
         return text
 
 def _generate_pdf_report(
     case_details: Dict[str, Any],
-    pension_types_list_config: List[PensionTypeInfo],
-    doc_requirements_config: Dict[str, PensionTypeDocuments]
+    benefit_types_list_config: List[BenefitTypeInfo],
+    doc_requirements_config: Dict[str, BenefitTypeDocuments]
 ) -> io.BytesIO:
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4,
@@ -110,21 +105,16 @@ def _generate_pdf_report(
     styles = getSampleStyleSheet()
     elements = []
 
-    # Шрифты
-    # Попробуем стандартный шрифт Helvetica, который обычно хорошо поддерживается
-    # и часто включает кириллицу. Если нет, понадобится явная регистрация TTF.
     font_name = 'Helvetica'
-    bold_font_name = 'Helvetica-Bold' # Стандартное имя для жирного Helvetica
+    bold_font_name = 'Helvetica-Bold'
     
-    # Применяем базовый шрифт к стандартным стилям
     styles['Normal'].fontName = font_name
-    styles['Heading1'].fontName = bold_font_name # Заголовки делаем жирными
+    styles['Heading1'].fontName = bold_font_name
     styles['Heading2'].fontName = bold_font_name
     styles['Heading3'].fontName = bold_font_name
     styles['Bullet'].fontName = font_name
     styles['Definition'].fontName = font_name
 
-    # Основные Стили
     title_style = ParagraphStyle(name='TitleStyle', parent=styles['Heading1'], fontSize=16, alignment=TA_CENTER, spaceAfter=12, fontName=bold_font_name)
     doc_date_style = ParagraphStyle(name='DocDateStyle', parent=styles['Normal'], fontSize=10, alignment=TA_RIGHT, spaceAfter=10, fontName=font_name)
     system_name_style = ParagraphStyle(name='SystemNameStyle', parent=styles['Normal'], fontSize=10, alignment=TA_CENTER, spaceBefore=6, spaceAfter=12, fontName=font_name)
@@ -134,26 +124,22 @@ def _generate_pdf_report(
     
     normal_style_justify = ParagraphStyle(name='NormalJustify', parent=styles['Normal'], fontSize=12, alignment=TA_JUSTIFY, spaceAfter=6, fontName=font_name)
     normal_style_left = ParagraphStyle(name='NormalLeft', parent=styles['Normal'], fontSize=12, alignment=TA_LEFT, spaceAfter=6, fontName=font_name)
-    # Для label_style используем <b /> теги внутри текста параграфа, ReportLab должен их обработать с базовым шрифтом
-    label_style = ParagraphStyle(name='LabelStyle', parent=normal_style_left, fontSize=12, fontName=font_name) 
+    label_style = ParagraphStyle(name='LabelStyle', parent=normal_style_left, fontSize=12, fontName=font_name)
     
     error_style = ParagraphStyle(name='ErrorStyle', parent=normal_style_justify, textColor=colors.red, spaceAfter=6, fontName=font_name)
     footer_style = ParagraphStyle(name='FooterStyle', parent=styles['Normal'], fontSize=10, alignment=TA_CENTER, spaceBefore=24, fontName=font_name)
 
-    # Извлечение данных из case_details
     case_id = case_details.get("id", "N/A")
     current_date_str = datetime.now().strftime("%d.%m.%Y")
     
     personal_data = case_details.get("personal_data", {})
     masked_personal_data = mask_personal_data(personal_data if personal_data else {})
 
-    # Шапка документа
-    elements.append(Paragraph(f"РЕШЕНИЕ № {case_id}", title_style))
-    elements.append(Paragraph(f"по заявлению о назначении пенсии", styles['Normal'])) # Подзаголовок если нужен
+    elements.append(Paragraph(f"ЗАКЛЮЧЕНИЕ № {case_id}", title_style))
+    elements.append(Paragraph(f"по запросу о мерах социальной поддержки", styles['Normal']))
     elements.append(Paragraph(f"Дата формирования: {current_date_str}", doc_date_style))
     elements.append(Spacer(1, 0.5*cm))
 
-    # Раздел 1: Информация о заявителе (обезличенная)
     elements.append(Paragraph("1. Сведения о заявителе (обезличенные)", section_title_style))
     elements.append(Paragraph(f"<b>Фамилия, имя, отчество (при наличии):</b> {masked_personal_data['full_name']}", label_style))
     elements.append(Paragraph(f"<b>Дата рождения:</b> {masked_personal_data['birth_date']}", label_style))
@@ -167,14 +153,12 @@ def _generate_pdf_report(
     elements.append(Paragraph(f"<b>Количество заявленных иждивенцев:</b> {masked_personal_data['dependents']}", label_style))
     elements.append(Spacer(1, 0.5*cm))
 
-    # Раздел 2: Запрашиваемый вид пенсионного обеспечения
-    elements.append(Paragraph("2. Запрашиваемый вид пенсионного обеспечения", section_title_style))
-    pension_type_id = case_details.get("pension_type", "Не указан")
-    pension_type_name = _get_pension_type_display_name(pension_type_id, pension_types_list_config)
-    elements.append(Paragraph(pension_type_name, normal_style_justify))
+    elements.append(Paragraph("2. Запрашиваемый вид поддержки", section_title_style))
+    benefit_type_id = case_details.get("pension_type", "Не указан")
+    benefit_type_name = _get_benefit_type_display_name(benefit_type_id, benefit_types_list_config)
+    elements.append(Paragraph(benefit_type_name, normal_style_justify))
     elements.append(Spacer(1, 0.5*cm))
 
-    # Раздел 3: Представленные сведения и документы
     elements.append(Paragraph("3. Представленные сведения и документы", section_title_style))
     
     disability_info = case_details.get("disability")
@@ -189,20 +173,17 @@ def _generate_pdf_report(
     work_experience_info = case_details.get("work_experience")
     pension_points = case_details.get("pension_points")
     if work_experience_info or pension_points is not None:
-        elements.append(Paragraph("3.2. Сведения о трудовом стаже и пенсионных баллах", subsection_title_style))
+        elements.append(Paragraph("3.2. Сведения о трудовом стаже", subsection_title_style))
         if work_experience_info:
-            # Используем поле calculated_total_years из новой модели WorkBookData
             total_years = work_experience_info.get('calculated_total_years', 'Не указан')
             elements.append(Paragraph(f"<b>Общий страховой стаж (лет):</b> {total_years}", label_style))
         if pension_points is not None:
             elements.append(Paragraph(f"<b>Индивидуальный пенсионный коэффициент (ИПК):</b> {pension_points}", label_style))
         
-        # Данные берем из records, которые теперь являются WorkBookRecordEntry (периодами)
         if work_experience_info and work_experience_info.get("records"):
             elements.append(Paragraph("<b>Периоды трудовой деятельности:</b>", label_style))
             table_data = [["Организация", "Должность", "Период работы", "Доп. инфо"]]
             
-            # work_experience_info["records"] теперь содержит обработанные периоды
             for record in work_experience_info["records"]:
                 start_date_obj = record.get('date_in')
                 end_date_obj = record.get('date_out')
@@ -212,11 +193,9 @@ def _generate_pdf_report(
                 
                 period_str = f"{start_date_str} - {end_date_str}"
                 
-                # Собираем дополнительную информацию из raw_text
                 org_details = Paragraph(record.get('organization', 'N/A'), normal_style_left)
                 pos_details = Paragraph(record.get('position', 'N/A'), normal_style_left)
 
-                # Для дополнительной информации можно использовать raw_text, если он есть
                 additional_info_str = record.get('raw_text', '')
                 additional_info_paragraph = Paragraph(additional_info_str, styles['Normal'])
 
@@ -227,14 +206,14 @@ def _generate_pdf_report(
                     additional_info_paragraph
                 ])
             
-            if len(table_data) > 1: # Если есть записи кроме заголовка
+            if len(table_data) > 1:
                 work_table = Table(table_data, colWidths=[5*cm, 4*cm, 3.5*cm, 4.5*cm])
                 work_table.setStyle(TableStyle([
                     ('BACKGROUND', (0,0), (-1,0), colors.grey),
                     ('TEXTCOLOR',(0,0),(-1,0),colors.whitesmoke),
                     ('ALIGN',(0,0),(-1,-1),'LEFT'),
-                    ('FONTNAME', (0,0), (-1,0), bold_font_name), # Используем bold_font_name
-                    ('FONTNAME', (0,1), (-1,-1), font_name), # Обычный шрифт для данных
+                    ('FONTNAME', (0,0), (-1,0), bold_font_name),
+                    ('FONTNAME', (0,1), (-1,-1), font_name),
                     ('FONTSIZE', (0,0), (-1,-1), 10),
                     ('BOTTOMPADDING', (0,0), (-1,0), 10),
                     ('BACKGROUND', (0,1), (-1,-1), colors.beige),
@@ -253,9 +232,9 @@ def _generate_pdf_report(
     
     submitted_documents = case_details.get("submitted_documents")
     if submitted_documents:
-        elements.append(Paragraph("3.4. Перечень представленных заявителем документов", subsection_title_style))
+        elements.append(Paragraph("3.4. Перечень представленных документов", subsection_title_style))
         for doc_id in submitted_documents:
-            doc_name = _get_document_display_name(doc_id, doc_requirements_config, pension_type_id)
+            doc_name = _get_document_display_name(doc_id, doc_requirements_config, benefit_type_id)
             elements.append(Paragraph(f"• {doc_name} (ID: {doc_id})", styles['Bullet']))
 
     if case_details.get("has_incorrect_document"):
@@ -273,7 +252,6 @@ def _generate_pdf_report(
             if extracted_fields and isinstance(extracted_fields, dict):
                 elements.append(Paragraph("  <i>Ключевые извлеченные поля (обезличенные):</i>", normal_style_left))
                 for key, val in extracted_fields.items():
-                     # Простое обезличивание для примера, может потребоваться более сложная логика
                     val_display = "[СКРЫТО]" if isinstance(val, str) and len(val) > 3 else str(val)
                     elements.append(Paragraph(f"    - {key}: {val_display}", normal_style_left))
             multimodal_assessment = ocr_doc.get("multimodal_assessment")
@@ -283,14 +261,13 @@ def _generate_pdf_report(
 
     elements.append(Spacer(1, 0.5*cm))
 
-    # Раздел 4: Результаты автоматизированного анализа
     elements.append(Paragraph("4. Результаты автоматизированного анализа и решение", section_title_style))
     final_status = case_details.get("final_status", "Статус не определен")
     status_display = final_status
     if final_status == "СООТВЕТСТВУЕТ":
-        status_display = "Право на назначение пенсии подтверждено"
+        status_display = "Право на меры поддержки подтверждено"
     elif final_status == "НЕ СООТВЕТСТВУЕТ":
-        status_display = "В праве на назначение пенсии отказано (условия для назначения пенсии не выполнены)"
+        status_display = "В праве на меры поддержки отказано (условия не выполнены)"
     elif final_status == "PROCESSING":
         status_display = "Дело находится в обработке"
     elif final_status == "ERROR_PROCESSING":
@@ -310,7 +287,6 @@ def _generate_pdf_report(
         elements.append(Paragraph(f"{rag_confidence*100:.1f}%", normal_style_justify))
     elements.append(Spacer(1, 0.5*cm))
     
-    # Раздел 5: Выявленные ошибки/несоответствия (если есть)
     errors_list = case_details.get("errors", [])
     if errors_list:
         elements.append(Paragraph("5. Выявленные ошибки/несоответствия", section_title_style))
@@ -324,15 +300,12 @@ def _generate_pdf_report(
                 elements.append(Paragraph(f"  Рекомендация: {error_item.get('recommendation')}", normal_style_left))
         elements.append(Spacer(1, 0.5*cm))
 
-    # Подвал документа
-    elements.append(Paragraph("Сформировано автоматизированной системой анализа пенсионных дел 'PFR-AI'.", footer_style))
+    elements.append(Paragraph("Сформировано автоматизированной системой поддержки участников СВО 'SVO-AI'.", footer_style))
     elements.append(Paragraph("Данное решение носит предварительный характер.", ParagraphStyle(name='FooterDisclaimer', parent=footer_style, fontSize=9)))
 
-
-    # Сборка документа и пагинация
     def add_page_numbers(canvas, doc_template):
         canvas.saveState()
-        canvas.setFont(font_name, 9) # Используем базовый font_name для номеров страниц
+        canvas.setFont(font_name, 9)
         page_num_text = f"Страница {doc_template.page}"
         canvas.drawCentredString(A4[0]/2, 1*cm, page_num_text)
         canvas.restoreState()
@@ -343,44 +316,28 @@ def _generate_pdf_report(
 
 def _generate_docx_report(
     case_details: Dict[str, Any],
-    pension_types_list_config: List[PensionTypeInfo],
-    doc_requirements_config: Dict[str, PensionTypeDocuments]
+    benefit_types_list_config: List[BenefitTypeInfo],
+    doc_requirements_config: Dict[str, BenefitTypeDocuments]
 ) -> io.BytesIO:
     doc = Document()
-    # Установка шрифта по умолчанию для всего документа (Times New Roman)
-    # Это более надежный способ, чем менять стиль 'Normal' для каждого параграфа
-    doc_element = doc.element.body
-    if doc_element is not None:
-        # Получаем или создаем секцию свойств документа
-        sectPr = doc_element.find(qn('w:sectPr'))
-        if sectPr is None:
-            sectPr = doc_element.makeelement(qn('w:sectPr'))
-            doc_element.append(sectPr)
-        # Устанавливаем основной шрифт для всего документа (если возможно через стили)
-        # Для DOCX лучше всего определить стили в шаблоне, если это возможно.
-        # Программно можно менять стиль 'Normal' или применять шрифт к каждому Run.
-        # Попробуем установить стиль 'Normal'
     style = doc.styles['Normal']
     font = style.font
     font.name = 'Times New Roman'
     font.size = Pt(12)
 
-    # Извлечение данных
     case_id = case_details.get("id", "N/A")
     current_date_str = datetime.now().strftime("%d.%m.%Y")
     personal_data = case_details.get("personal_data", {})
     masked_personal_data = mask_personal_data(personal_data if personal_data else {})
 
-    # Шапка документа
-    title = doc.add_heading(f"РЕШЕНИЕ № {case_id}", level=1)
+    title = doc.add_heading(f"ЗАКЛЮЧЕНИЕ № {case_id}", level=1)
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    doc.add_paragraph(f"по заявлению о назначении пенсии", style='Normal').alignment = WD_ALIGN_PARAGRAPH.CENTER
+    doc.add_paragraph(f"по запросу о мерах социальной поддержки", style='Normal').alignment = WD_ALIGN_PARAGRAPH.CENTER
     
     date_p = doc.add_paragraph(f"Дата формирования: {current_date_str}")
     date_p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    doc.add_paragraph() # Spacer
+    doc.add_paragraph()
 
-    # Раздел 1: Информация о заявителе (обезличенная)
     doc.add_heading("1. Сведения о заявителе (обезличенные)", level=2)
     p = doc.add_paragraph()
     p.add_run("Фамилия, имя, отчество (при наличии): ").bold = True
@@ -401,7 +358,7 @@ def _generate_docx_report(
     if masked_personal_data.get("name_change_info") and masked_personal_data["name_change_info"].get('old_full_name') != "[ПРЕЖНЕЕ ФИО СКРЫТО]":
         p = doc.add_paragraph()
         p.add_run("Сведения о ранее измененном ФИО:").bold = True
-        sub_p = doc.add_paragraph(f"  Прежнее ФИО: {masked_personal_data['name_change_info']['old_full_name']}", style='ListBullet') # или просто отступ
+        sub_p = doc.add_paragraph(f"  Прежнее ФИО: {masked_personal_data['name_change_info']['old_full_name']}", style='ListBullet')
         sub_p.paragraph_format.left_indent = Cm(0.5)
         sub_p = doc.add_paragraph(f"  Дата изменения: {masked_personal_data['name_change_info']['date_changed']}", style='ListBullet')
         sub_p.paragraph_format.left_indent = Cm(0.5)
@@ -411,37 +368,43 @@ def _generate_docx_report(
     p.add_run(masked_personal_data['dependents'])
     doc.add_paragraph()
 
-    # Раздел 2: Запрашиваемый вид пенсионного обеспечения
-    doc.add_heading("2. Запрашиваемый вид пенсионного обеспечения", level=2)
-    pension_type_id = case_details.get("pension_type", "Не указан")
-    pension_type_name = _get_pension_type_display_name(pension_type_id, pension_types_list_config)
-    doc.add_paragraph(pension_type_name, style='Normal')
+    doc.add_heading("2. Запрашиваемый вид поддержки", level=2)
+    benefit_type_id = case_details.get("pension_type", "Не указан")
+    benefit_type_name = _get_benefit_type_display_name(benefit_type_id, benefit_types_list_config)
+    doc.add_paragraph(benefit_type_name, style='Normal')
     doc.add_paragraph()
 
-    # Раздел 3: Представленные сведения и документы
     doc.add_heading("3. Представленные сведения и документы", level=2)
     
     disability_info = case_details.get("disability")
     if disability_info:
-        p_disability = doc.add_heading("3.1. Сведения об инвалидности", level=3)
+        doc.add_heading("3.1. Сведения об инвалидности", level=3)
         dis_date = disability_info.get('date')
         dis_date_str = dis_date.strftime("%d.%m.%Y") if isinstance(dis_date, datetime) or isinstance(dis_date, date) else str(dis_date or 'Не указана')
-        add_field(doc, "Дата установления:", dis_date_str)
-        add_field(doc, "Номер справки МСЭ:", disability_info.get('cert_number', 'Не указан'))
+        p = doc.add_paragraph()
+        p.add_run("Дата установления: ").bold = True
+        p.add_run(dis_date_str)
+        p = doc.add_paragraph()
+        p.add_run("Номер справки МСЭ: ").bold = True
+        p.add_run(disability_info.get('cert_number', 'Не указан'))
 
     work_experience_info = case_details.get("work_experience")
     pension_points = case_details.get("pension_points")
     if work_experience_info or pension_points is not None:
-        p_work = doc.add_heading("3.2. Сведения о трудовом стаже и пенсионных баллах", level=3)
+        doc.add_heading("3.2. Сведения о трудовом стаже", level=3)
         if work_experience_info:
             total_years = work_experience_info.get('calculated_total_years', 'Не указан')
-            add_field(doc, "Общий страховой стаж (лет):", str(total_years))
+            p = doc.add_paragraph()
+            p.add_run("Общий страховой стаж (лет): ").bold = True
+            p.add_run(str(total_years))
         if pension_points is not None:
-            add_field(doc, "Индивидуальный пенсионный коэффициент (ИПК):", str(pension_points))
+            p = doc.add_paragraph()
+            p.add_run("Индивидуальный пенсионный коэффициент (ИПК): ").bold = True
+            p.add_run(str(pension_points))
 
         if work_experience_info and work_experience_info.get("records"):
-            p_work_records = doc.add_paragraph()
-            p_work_records.add_run("Периоды трудовой деятельности:").bold = True
+            p = doc.add_paragraph()
+            p.add_run("Периоды трудовой деятельности:").bold = True
             
             table = doc.add_table(rows=1, cols=3)
             table.style = 'Table Grid'
@@ -450,43 +413,37 @@ def _generate_docx_report(
             hdr_cells[1].text = 'Период работы'
             hdr_cells[2].text = 'Дополнительная информация'
 
-            # work_experience_info["records"] теперь содержит обработанные периоды
             for record in work_experience_info["records"]:
                 row_cells = table.add_row().cells
                 
-                # Ячейка 1: Организация и должность
                 org_text = record.get('organization', 'N/A')
                 pos_text = record.get('position', 'N/A')
                 cell1_paragraph = row_cells[0].paragraphs[0]
                 cell1_paragraph.add_run(f"{org_text}\n").bold = True
                 cell1_paragraph.add_run(pos_text)
 
-                # Ячейка 2: Период
                 start_date_obj = record.get('date_in')
                 end_date_obj = record.get('date_out')
                 start_date_str = start_date_obj.strftime("%d.%m.%Y") if start_date_obj else 'N/A'
                 end_date_str = end_date_obj.strftime("%d.%m.%Y") if end_date_obj else 'по н.в.'
                 row_cells[1].text = f"{start_date_str} - {end_date_str}"
                 
-                # Ячейка 3: Доп. инфо из raw_text
                 row_cells[2].text = record.get('raw_text', '')
 
-            # Автоподбор ширины колонок
             for column in table.columns:
                 column.autofit = True
 
-
     benefits = case_details.get("benefits")
     if benefits:
-        p_benefits = doc.add_heading("3.3. Заявленные льготы", level=3)
+        doc.add_heading("3.3. Заявленные льготы", level=3)
         for benefit in benefits:
             doc.add_paragraph(str(benefit), style='ListBullet')
     
     submitted_documents = case_details.get("submitted_documents")
     if submitted_documents:
-        doc.add_heading("3.4. Перечень представленных заявителем документов", level=3)
+        doc.add_heading("3.4. Перечень представленных документов", level=3)
         for doc_id in submitted_documents:
-            doc_name = _get_document_display_name(doc_id, doc_requirements_config, pension_type_id)
+            doc_name = _get_document_display_name(doc_id, doc_requirements_config, benefit_type_id)
             doc.add_paragraph(f"{doc_name} (ID: {doc_id})", style='ListBullet')
 
     if case_details.get("has_incorrect_document"):
@@ -508,7 +465,7 @@ def _generate_docx_report(
                 sub_p.paragraph_format.left_indent = Cm(0.5)
                 for key, val in extracted_fields.items():
                     val_display = "[СКРЫТО]" if isinstance(val, str) and len(val) > 3 else str(val)
-                    field_p = doc.add_paragraph(f"    - {key}: {val_display}", style='ListBullet') # Или Normal с отступом
+                    field_p = doc.add_paragraph(f"    - {key}: {val_display}", style='ListBullet')
                     field_p.paragraph_format.left_indent = Cm(1.0)
             multimodal_assessment = ocr_doc.get("multimodal_assessment")
             if multimodal_assessment:
@@ -516,14 +473,13 @@ def _generate_docx_report(
                  sub_p.paragraph_format.left_indent = Cm(0.5)
     doc.add_paragraph()
 
-    # Раздел 4: Результаты автоматизированного анализа
     doc.add_heading("4. Результаты автоматизированного анализа и решение", level=2)
     final_status = case_details.get("final_status", "Статус не определен")
     status_display = final_status
     if final_status == "СООТВЕТСТВУЕТ":
-        status_display = "Право на назначение пенсии подтверждено"
+        status_display = "Право на меры поддержки подтверждено"
     elif final_status == "НЕ СООТВЕТСТВУЕТ":
-        status_display = "В праве на назначение пенсии отказано (условия для назначения пенсии не выполнены)"
+        status_display = "В праве на меры поддержки отказано (условия не выполнены)"
     elif final_status == "PROCESSING":
         status_display = "Дело находится в обработке"
     elif final_status == "ERROR_PROCESSING":
@@ -544,10 +500,9 @@ def _generate_docx_report(
         doc.add_paragraph(f"{rag_confidence*100:.1f}%", style='Normal').alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
     doc.add_paragraph()
     
-    # Раздел 5: Выявленные ошибки/несоответствия (если есть)
     errors_list = case_details.get("errors", [])
     if errors_list:
-        doc.add_heading("5. Выявленные ошибки/несоответствия", level=2) # Сделаем Level 2 для выделения
+        doc.add_heading("5. Выявленные ошибки/несоответствия", level=2)
         for err_idx, error_item in enumerate(errors_list):
             p_err_title = doc.add_paragraph()
             p_err_title.add_run(f"Ошибка {err_idx + 1}:").bold = True
@@ -560,9 +515,8 @@ def _generate_docx_report(
                 doc.add_paragraph(f"  Рекомендация: {error_item.get('recommendation')}", style='Normal').paragraph_format.left_indent = Cm(0.5)
         doc.add_paragraph()
 
-    # Подвал документа
-    doc.add_paragraph() # Spacer
-    footer_p1 = doc.add_paragraph("Сформировано автоматизированной системой анализа пенсионных дел 'PFR-AI'.")
+    doc.add_paragraph()
+    footer_p1 = doc.add_paragraph("Сформировано автоматизированной системой поддержки участников СВО 'SVO-AI'.")
     footer_p1.alignment = WD_ALIGN_PARAGRAPH.CENTER
     for run in footer_p1.runs: run.font.size = Pt(10)
     
@@ -570,40 +524,32 @@ def _generate_docx_report(
     footer_p2.alignment = WD_ALIGN_PARAGRAPH.CENTER
     for run in footer_p2.runs: run.font.size = Pt(9)
 
-
     buffer = io.BytesIO()
     doc.save(buffer)
     buffer.seek(0)
     return buffer
 
 async def generate_document(
-    case_details: Dict[str, Any], # Изменен параметр
-    pension_types_list_config: List[PensionTypeInfo], # Добавлен параметр
-    doc_requirements_config: Dict[str, PensionTypeDocuments], # Добавлен параметр
+    case_details: Dict[str, Any],
+    benefit_types_list_config: List[BenefitTypeInfo],
+    doc_requirements_config: Dict[str, BenefitTypeDocuments],
     document_format: DocumentFormat
 ) -> Tuple[io.BytesIO, str, str]:
-    """Асинхронно генерирует документ указанного формата, используя asyncio.to_thread."""
-
-    # current_date больше не нужен как параметр, генерируется внутри _generate_X_report
-    # masked_data также генерируется внутри _generate_X_report из case_details["personal_data"]
-    # errors также из case_details
-    # pension_type, final_status, explanation, case_id также из case_details
-
     doc_format_value = document_format.value
 
     if doc_format_value == DocumentFormat.pdf.value:
         buffer = await asyncio.to_thread(
             _generate_pdf_report, 
-            case_details, pension_types_list_config, doc_requirements_config
+            case_details, benefit_types_list_config, doc_requirements_config
         )
-        filename = f"pension_decision_{case_details.get('id', 'unknown')}_{datetime.now().strftime('%Y%m%d')}.pdf"
+        filename = f"benefit_decision_{case_details.get('id', 'unknown')}_{datetime.now().strftime('%Y%m%d')}.pdf"
         mimetype = "application/pdf"
     elif doc_format_value == DocumentFormat.docx.value:
         buffer = await asyncio.to_thread(
             _generate_docx_report, 
-            case_details, pension_types_list_config, doc_requirements_config
+            case_details, benefit_types_list_config, doc_requirements_config
         )
-        filename = f"pension_decision_{case_details.get('id', 'unknown')}_{datetime.now().strftime('%Y%m%d')}.docx"
+        filename = f"benefit_decision_{case_details.get('id', 'unknown')}_{datetime.now().strftime('%Y%m%d')}.docx"
         mimetype = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     else:
         raise ValueError(f"Unsupported document format: {doc_format_value}")

@@ -21,9 +21,9 @@ import {
 } from '@ant-design/icons';
 import { getHealthCheck } from '../services/apiClient';
 import type { HealthCheckResponse, DependencyStatus, ApiError } from '../types';
-import dayjs from 'dayjs'; // Для форматирования даты
-import 'dayjs/locale/ru'; // Опционально, для русской локализации dayjs
-dayjs.locale('ru'); // Активируем русскую локаль
+import dayjs from 'dayjs';
+import 'dayjs/locale/ru';
+dayjs.locale('ru');
 
 const { Title, Text } = Typography;
 
@@ -51,7 +51,6 @@ const statusText: Record<DependencyStatus['status'] | HealthCheckResponse['overa
   skipped: 'Пропущено',
 };
 
-
 const SystemHealthPage: React.FC = () => {
   const [healthData, setHealthData] = useState<HealthCheckResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -65,9 +64,9 @@ const SystemHealthPage: React.FC = () => {
       setHealthData(data);
     } catch (err) {
       const apiErr = err as ApiError;
-      setError(apiErr.message || 'Не удалось загрузить состояние системы.');
+      setError(apiErr.message || 'Не удалось загрузить состояние системы поддержки участников СВО.');
       console.error('Error fetching system health:', apiErr);
-      setHealthData(null); // Очищаем старые данные при ошибке
+      setHealthData(null);
     } finally {
       setLoading(false);
     }
@@ -82,7 +81,7 @@ const SystemHealthPage: React.FC = () => {
       key={dep.name}
       label={
         <Text strong>
-          {dep.name.replace(/_/g, ' ')} {/* Замена _ на пробел для лучшего вида */}
+          {dep.name.replace(/_/g, ' ')}
         </Text>
       }
       span={3}
@@ -98,7 +97,7 @@ const SystemHealthPage: React.FC = () => {
     </Descriptions.Item>
   );
 
-  if (loading && !healthData) { // Показываем спиннер только при первой загрузке
+  if (loading && !healthData) {
     return (
       <div style={{ textAlign: 'center', padding: '50px' }}>
         <Spin size="large" tip="Загрузка состояния системы..." />
@@ -148,7 +147,7 @@ const SystemHealthPage: React.FC = () => {
         <Col>
           <Title level={3} style={{ margin: 0 }}>
             <ApiOutlined style={{ marginRight: 8, color: statusColors[healthData.overall_status]}} />
-            Состояние системы
+            Состояние системы поддержки
           </Title>
         </Col>
         <Col>

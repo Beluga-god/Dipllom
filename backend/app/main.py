@@ -3,13 +3,13 @@ from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from pydantic import BaseModel, Field
-from app.rag_core.engine import PensionRAG, KnowledgeGraphBuilder
+from app.rag_core.engine import SVORAG, KnowledgeGraphBuilder
 from .models import (
     CaseDataInput, ProcessOutput, CaseHistoryEntry, DocumentFormat, DisabilityInfo, 
     PersonalData, DocumentTypeToExtract, OtherDocumentData,
     ErrorDetail, FullCaseData, StandardErrorResponse
 )
-from .config_models.config_models import DocumentDetail, PensionTypeInfo, PensionTypeDocuments
+from .config_models.config_models import DocumentDetail, BenefitTypeInfo, BenefitTypeDocuments
 from .config_loader import load_configuration, get_standard_document_names_from_config
 
 from .database import create_db_and_tables, get_db_connection, async_engine, cases_table
@@ -36,23 +36,23 @@ import os
 logger = logging.getLogger(__name__)
 logger_bg = logging.getLogger(__name__ + ".background")
 
-async def validate_pension_type_dependency(
+async def validate_benefit_type_dependency(
     request: Request,
     case_data: CaseDataInput
 ):
-    logger.debug(f"Запуск зависимости validate_pension_type_dependency для типа: {case_data.pension_type}")
-    if not hasattr(request.app.state, 'pension_types_config') or not request.app.state.pension_types_config:
-        logger.error("Конфигурация типов пенсий не загружена в validate_pension_type_dependency.")
-        raise HTTPException(status_code=503, detail="Сервис временно недоступен: конфигурация типов пенсий не загружена.")
+    logger.debug(f"Запуск зависимости validate_benefit_type_dependency для типа: {case_data.pension_type}")
+    if not hasattr(request.app.state, 'benefit_types_config') or not request.app.state.benefit_types_config:
+        logger.error("Конфигурация типов льгот не загружена в validate_benefit_type_dependency.")
+        raise HTTPException(status_code=503, detail="Сервис временно недоступен: конфигурация типов льгот не загружена.")
     
-    valid_pension_type_ids = {pt.id for pt in request.app.state.pension_types_config}
-    if case_data.pension_type not in valid_pension_type_ids:
-        logger.warning(f"Недопустимый тип пенсии '{case_data.pension_type}' получен в запросе. Допустимые: {valid_pension_type_ids}")
+    valid_benefit_type_ids = {bt.id for bt in request.app.state.benefit_types_config}
+    if case_data.pension_type not in valid_benefit_type_ids:
+        logger.warning(f"Недопустимый тип льготы '{case_data.pension_type}' получен в запросе. Допустимые: {valid_benefit_type_ids}")
         raise HTTPException(
             status_code=422,
-            detail=f"Недопустимый тип пенсии: '{case_data.pension_type}'. Допустимые типы: {', '.join(valid_pension_type_ids)}."
+            detail=f"Недопустимый тип льготы: '{case_data.pension_type}'. Допустимые типы: {', '.join(valid_benefit_type_ids)}."
         )
-    logger.debug(f"Тип пенсии '{case_data.pension_type}' прошел валидацию в зависимости.")
+    logger.debug(f"Тип льготы '{case_data.pension_type}' прошел валидацию в зависимости.")
     return case_data
 
 @asynccontextmanager
@@ -62,10 +62,10 @@ async def lifespan(app: FastAPI):
     logger.info("Creating DB tables if they don't exist...")
     await asyncio.to_thread(create_db_and_tables)
     
-    logger.info("Loading pension configurations...")
+    logger.info("Loading benefit configurations...")
     try:
-        app.state.pension_types_config, app.state.document_requirements_config = await asyncio.to_thread(load_configuration)
-        logger.info(f"Loaded {len(app.state.pension_types_config)} pension types and requirements for {len(app.state.document_requirements_config)} types.")
+        app.state.benefit_types_config, app.state.document_requirements_config = await asyncio.to_thread(load_configuration)
+        logger.info(f"Loaded {len(app.state.benefit_types_config)} benefit types and requirements for {len(app.state.document_requirements_config)} types.")
         
         app.state.standard_document_names = get_standard_document_names_from_config(
             app.state.document_requirements_config
@@ -74,21 +74,21 @@ async def lifespan(app: FastAPI):
         logger.info(f"Standard document names loaded: {app.state.standard_document_names}")
 
     except Exception as e:
-        logger.error(f"!!! ERROR loading pension configurations or standard doc names: {e}", exc_info=True)
-        app.state.pension_types_config = []
+        logger.error(f"!!! ERROR loading benefit configurations or standard doc names: {e}", exc_info=True)
+        app.state.benefit_types_config = []
         app.state.document_requirements_config = {}
         app.state.standard_document_names = []
     
-    logger.info("Initializing PensionRAG Engine...")
+    logger.info("Initializing SVORAG Engine...")
     try:
-        app.state.rag_engine = PensionRAG()
+        app.state.rag_engine = SVORAG()
         await app.state.rag_engine.async_init(
-            pension_types_config=app.state.pension_types_config,
+            benefit_types_config=app.state.benefit_types_config,
             document_requirements_config=app.state.document_requirements_config
         )
-        logger.info("PensionRAG Engine initialized with async_init.")
+        logger.info("SVORAG Engine initialized with async_init.")
     except Exception as e_rag_init:
-        logger.error(f"!!! ERROR initializing PensionRAG Engine (async_init): {e_rag_init}", exc_info=True)
+        logger.error(f"!!! ERROR initializing SVORAG Engine (async_init): {e_rag_init}", exc_info=True)
         traceback.print_exc()
         app.state.rag_engine = None
     logger.info("Startup complete.")
@@ -123,9 +123,9 @@ app.add_middleware(
 
 def format_case_description_for_rag_background(
     case_data: CaseDataInput,
-    pension_types_config: List[PensionTypeInfo],
-    document_requirements_config: Dict[str, PensionTypeDocuments]
-    ) -> str:
+    benefit_types_config: List[BenefitTypeInfo],
+    document_requirements_config: Dict[str, BenefitTypeDocuments]
+) -> str:
     parts = []
     pd = case_data.personal_data
     full_name = " ".join(filter(None, [pd.last_name, pd.first_name, pd.middle_name]))
@@ -133,9 +133,9 @@ def format_case_description_for_rag_background(
     if pd.name_change_info:
         parts.append(f"Была смена ФИО: Старое ФИО: {pd.name_change_info.old_full_name or 'Не указ.'}, Дата: {pd.name_change_info.date_changed.strftime('%d.%m.%Y') if pd.name_change_info.date_changed else 'Не указ.'}.")
 
-    pension_type_info = next((pt for pt in pension_types_config if pt.id == case_data.pension_type), None)
-    pension_type_display_name = pension_type_info.display_name if pension_type_info else case_data.pension_type
-    parts.append(f"Запрашиваемый тип пенсии: {pension_type_display_name}.")
+    benefit_type_info = next((bt for bt in benefit_types_config if bt.id == case_data.pension_type), None)
+    benefit_type_display_name = benefit_type_info.display_name if benefit_type_info else case_data.pension_type
+    parts.append(f"Запрашиваемый тип льготы: {benefit_type_display_name}.")
 
     if case_data.disability:
         dis_info = case_data.disability
@@ -143,7 +143,7 @@ def format_case_description_for_rag_background(
         parts.append(f"Инвалидность: {group_text}, Дата установления: {dis_info.date.strftime('%d.%m.%Y')}. " +
                         (f"Номер справки МСЭ: {dis_info.cert_number}." if dis_info.cert_number else ""))
 
-    if case_data.pension_type == 'retirement_standard' and case_data.work_experience:
+    if case_data.work_experience:
         we = case_data.work_experience
         parts.append(f"Общий страховой стаж: {we.calculated_total_years or 0.0} лет.")
         parts.append(f"Пенсионные баллы (ИПК): {case_data.pension_points or 'Не указаны'}.")
@@ -167,8 +167,8 @@ def format_case_description_for_rag_background(
     
     if case_data.submitted_documents:
         doc_details_map = {}
-        for pt_id_cfg, pension_reqs_cfg in document_requirements_config.items():
-            for doc_cfg in pension_reqs_cfg.documents:
+        for pt_id_cfg, benefit_reqs_cfg in document_requirements_config.items():
+            for doc_cfg in benefit_reqs_cfg.documents:
                 doc_details_map[doc_cfg.id] = doc_cfg
         
         doc_ids = ", ".join(case_data.submitted_documents)
@@ -227,7 +227,7 @@ def analyze_rag_for_compliance(rag_text: str) -> bool:
 
 @app.get("/")
 async def read_root():
-    return {"message": "PFR-AI Backend is running!"}
+    return {"message": "SVO Support System Backend is running!"}
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
@@ -332,46 +332,37 @@ async def download_document(
         logger.warning(f"Case {case_id} not found for document generation.")
         raise HTTPException(status_code=404, detail="Дело не найдено")
 
-    # Преобразуем RowProxy в словарь, если это необходимо
-    # и десериализуем JSON поля.
-    # Важно: теперь мы ожидаем, что case_data_db уже содержит ВСЕ необходимые поля
-    # для детализированного документа. Если crud.get_case_by_id не возвращает все,
-    # его нужно будет доработать.
     try:
-        # Попытка создать словарь из db_case_row, если это объект Row или похожий
         case_data_dict = dict(case_data_db._mapping if hasattr(case_data_db, '_mapping') else case_data_db)
         
-        # Десериализация JSON полей (этот код уже был, но теперь он более критичен)
         for key in ['personal_data', 'errors', 'disability', 'work_experience', 'benefits', 'submitted_documents', 'other_documents_extracted_data']:
             if key in case_data_dict and isinstance(case_data_dict[key], str):
                 try:
                     case_data_dict[key] = json.loads(case_data_dict[key])
                 except json.JSONDecodeError:
                     logger.warning(f"Could not decode JSON for field '{key}' in case {case_id}. Value: {case_data_dict[key]}")
-                    # Устанавливаем значения по умолчанию, если парсинг не удался, чтобы избежать ошибок далее
                     if key in ['errors', 'benefits', 'submitted_documents', 'other_documents_extracted_data']:
-                        case_data_dict[key] = [] if key not in ['other_documents_extracted_data'] else None # Для other_documents_extracted_data может быть None
+                        case_data_dict[key] = []
                     elif key == 'personal_data':
-                         case_data_dict[key] = {} # Пустой словарь для персональных данных
+                         case_data_dict[key] = {}
                     else:
                         case_data_dict[key] = None 
             elif key == 'personal_data' and not isinstance(case_data_dict.get(key), dict) and case_data_dict.get(key) is not None:
                 logger.warning(f"personal_data for case {case_id} is not a string or dict, setting to empty dict. Type: {type(case_data_dict[key])}")
                 case_data_dict[key] = {}
-            elif key == 'personal_data' and case_data_dict.get(key) is None: # Если personal_data отсутствует вообще
+            elif key == 'personal_data' and case_data_dict.get(key) is None:
                 logger.warning(f"personal_data is missing for case {case_id}. Setting to empty dict.")
                 case_data_dict[key] = {} 
 
-        # Проверка наличия конфигураций в app.state
-        if not hasattr(request.app.state, 'pension_types_config') or not request.app.state.pension_types_config:
-            logger.error("Pension types configuration not found in app.state for document generation.")
-            raise HTTPException(status_code=503, detail="Ошибка конфигурации сервера: типы пенсий не загружены.")
+        if not hasattr(request.app.state, 'benefit_types_config') or not request.app.state.benefit_types_config:
+            logger.error("Benefit types configuration not found in app.state for document generation.")
+            raise HTTPException(status_code=503, detail="Ошибка конфигурации сервера: типы льгот не загружены.")
         
         if not hasattr(request.app.state, 'document_requirements_config') or not request.app.state.document_requirements_config:
             logger.error("Document requirements configuration not found in app.state for document generation.")
             raise HTTPException(status_code=503, detail="Ошибка конфигурации сервера: требования к документам не загружены.")
 
-        pension_types_list_config = request.app.state.pension_types_config
+        benefit_types_list_config = request.app.state.benefit_types_config
         doc_requirements_config = request.app.state.document_requirements_config
 
     except Exception as e_prepare:
@@ -380,13 +371,13 @@ async def download_document(
 
     if not case_data_dict.get("pension_type"):
         logger.error(f"Missing pension_type in case data for case_id {case_id} during document generation.")
-        raise HTTPException(status_code=500, detail="Недостаточно данных для генерации документа (отсутствует тип пенсии).")
+        raise HTTPException(status_code=500, detail="Недостаточно данных для генерации документа (отсутствует тип льготы).")
     
     try:
         file_buffer, filename, mimetype = await services.generate_document(
-            case_details=case_data_dict, # Передаем весь словарь с данными дела
-            pension_types_list_config=pension_types_list_config, # Передаем конфигурацию типов пенсий
-            doc_requirements_config=doc_requirements_config, # Передаем конфигурацию требований к документам
+            case_details=case_data_dict,
+            benefit_types_list_config=benefit_types_list_config,
+            doc_requirements_config=doc_requirements_config,
             document_format=format,
         )
         logger.info(f"Document {filename} (type: {mimetype}) generated successfully for case {case_id}.")
@@ -426,9 +417,6 @@ async def cleanup_expired_tasks():
         except Exception as e:
             logger.error(f"Ошибка при очистке просроченных OCR задач: {e}", exc_info=True)
             await asyncio.sleep(300)
-
-from typing import Dict, Optional, Callable, Any
-import time
 
 class TTLCache:
     def __init__(self, ttl_seconds: int = 3600):
@@ -535,20 +523,20 @@ async def submit_document_for_extraction(
 ):
     logger.info(f"User '{current_user_with_role['username']}' (role: {current_user_with_role['role']}) submitted document for extraction: {document_type.value}, file: {image.filename}, TTL: {ttl_hours}ч")
     
-    if not image.content_type or image.content_type not in ALLOWED_IMAGE_MIME_TYPES:
-        logger.warning(f"Попытка загрузки файла с недопустимым MIME-типом для OCR: {image.filename}, тип: {image.content_type}. Разрешенные: {ALLOWED_IMAGE_MIME_TYPES}")
+    if not image.content_type or image.content_type not in ["image/jpeg", "image/png", "image/gif", "image/bmp", "image/webp"]:
+        logger.warning(f"Попытка загрузки файла с недопустимым MIME-типом для OCR: {image.filename}, тип: {image.content_type}")
         raise HTTPException(
             status_code=400, 
-            detail=f"Неверный тип файла: {image.content_type}. Пожалуйста, загрузите изображение одного из следующих форматов: {', '.join(ALLOWED_IMAGE_MIME_TYPES)}."
+            detail=f"Неверный тип файла: {image.content_type}. Пожалуйста, загрузите изображение в формате JPEG, PNG, GIF, BMP или WebP."
         )
 
     image_bytes = await image.read()
-
-    if len(image_bytes) > MAX_FILE_SIZE_BYTES:
-        logger.warning(f"Попытка загрузки слишком большого файла для OCR: {image.filename}, размер: {len(image_bytes)} байт. Максимум: {MAX_FILE_SIZE_BYTES} байт.")
+    max_size = 10 * 1024 * 1024
+    if len(image_bytes) > max_size:
+        logger.warning(f"Попытка загрузки слишком большого файла для OCR: {image.filename}, размер: {len(image_bytes)} байт. Максимум: {max_size} байт.")
         raise HTTPException(
             status_code=413, 
-            detail=f"Размер файла {image.filename} ({len(image_bytes)/(1024*1024):.2f} МБ) превышает максимально допустимый ({MAX_FILE_SIZE_MB} МБ)."
+            detail=f"Размер файла {image.filename} ({len(image_bytes)/(1024*1024):.2f} МБ) превышает максимально допустимый (10 МБ)."
         )
     
     task_id = str(uuid.uuid4()) 
@@ -647,39 +635,39 @@ async def start_background_tasks():
     logger.info("Запущена фоновая задача очистки просроченных OCR задач")
 
 @app.get(
-    "/api/v1/pension_types",
-    summary="Получить список типов пенсий",
-    description="Возвращает список всех доступных для выбора типов пенсий с их идентификаторами и отображаемыми именами.",
+    "/api/v1/benefit_types",
+    summary="Получить список типов льгот",
+    description="Возвращает список всех доступных для выбора типов льгот с их идентификаторами и отображаемыми именами.",
     response_model=List[Dict[str, str]],
     dependencies=[Depends(auth.get_current_user_data)]
 )
-async def get_pension_types(
+async def get_benefit_types(
     request: Request,
     current_user: Dict[str, Any] = Depends(auth.get_current_user_data)
 ):
-    logger.info(f"User '{current_user['username']}' requested pension types.")
-    if not request.app.state.pension_types_config:
-        raise HTTPException(status_code=503, detail="Конфигурация типов пенсий не загружена.")
-    return [{"id": pt.id, "display_name": pt.display_name, "description": pt.description} 
-            for pt in request.app.state.pension_types_config]
+    logger.info(f"User '{current_user['username']}' requested benefit types.")
+    if not request.app.state.benefit_types_config:
+        raise HTTPException(status_code=503, detail="Конфигурация типов льгот не загружена.")
+    return [{"id": bt.id, "display_name": bt.display_name, "description": bt.description} 
+            for bt in request.app.state.benefit_types_config]
 
 @app.get(
-    "/api/v1/pension_documents/{pension_type_id}", 
+    "/api/v1/benefit_documents/{benefit_type_id}", 
     response_model=List[DocumentDetail],
     dependencies=[Depends(auth.get_current_user_data)]
 )
-async def get_pension_type_documents(
-    pension_type_id: str, 
+async def get_benefit_type_documents(
+    benefit_type_id: str, 
     request: Request,
     current_user: Dict[str, Any] = Depends(auth.get_current_user_data)
 ):
-    logger.info(f"User '{current_user['username']}' requested documents for pension type {pension_type_id}.")
+    logger.info(f"User '{current_user['username']}' requested documents for benefit type {benefit_type_id}.")
     if not request.app.state.document_requirements_config:
         raise HTTPException(status_code=503, detail="Конфигурация требований к документам не загружена.")
     
-    requirements = request.app.state.document_requirements_config.get(pension_type_id)
+    requirements = request.app.state.document_requirements_config.get(benefit_type_id)
     if not requirements:
-        raise HTTPException(status_code=404, detail=f"Требования для типа пенсии '{pension_type_id}' не найдены.")
+        raise HTTPException(status_code=404, detail=f"Требования для типа льготы '{benefit_type_id}' не найдены.")
     return requirements.documents 
 
 rag_results_cache = TTLCache(ttl_seconds=3600)
@@ -687,9 +675,9 @@ rag_results_cache = TTLCache(ttl_seconds=3600)
 async def process_case_in_background(
     case_id: int,
     case_data_dict: dict,
-    rag_engine: PensionRAG,
-    pension_types_config: List[PensionTypeInfo],
-    document_requirements_config: Dict[str, PensionTypeDocuments]
+    rag_engine: SVORAG,
+    benefit_types_config: List[BenefitTypeInfo],
+    document_requirements_config: Dict[str, BenefitTypeDocuments]
 ):
     logger_bg.info(f"Начало фоновой обработки для case_id: {case_id}")
     try:
@@ -720,7 +708,7 @@ async def process_case_in_background(
         
         case_description_full = format_case_description_for_rag_background(
             case_data_for_rag, 
-            pension_types_config,
+            benefit_types_config,
             document_requirements_config
         )
         
@@ -733,7 +721,7 @@ async def process_case_in_background(
         rag_analysis_text, rag_confidence_score = await rag_engine.query(
             case_data=case_data_for_rag,
             case_description=case_description_full,
-            pension_type=case_data_for_rag.pension_type,
+            benefit_type=case_data_for_rag.pension_type,
             disability_info=case_data_dict.get("disability")
         )
         
@@ -781,16 +769,12 @@ async def process_case_in_background(
 async def submit_case_for_processing(
     request: Request,
     background_tasks: BackgroundTasks,
-    case_data: CaseDataInput = Depends(validate_pension_type_dependency), 
+    case_data: CaseDataInput = Depends(validate_benefit_type_dependency), 
     conn: AsyncConnection = Depends(get_db_connection),
     current_user_with_role: Dict[str, Any] = Depends(auth.require_manager_role)
 ):
-    """
-    Принимает данные дела, сохраняет их в БД, 
-    и запускает фоновую задачу для RAG-анализа.
-    """
     logger.info(f"User '{current_user_with_role.get('username')}' (role: {current_user_with_role.get('role')}) submitted case for processing: type {case_data.pension_type}")
-    logger.info(f"Получен запрос на создание и обработку дела для типа пенсии: {case_data.pension_type}")
+    logger.info(f"Получен запрос на создание и обработку дела для типа льготы: {case_data.pension_type}")
     
     rag_engine = request.app.state.rag_engine
     if not rag_engine:
@@ -798,12 +782,9 @@ async def submit_case_for_processing(
         raise HTTPException(status_code=503, detail="Сервис анализа временно недоступен.")
 
     try:
-        # 1. Создание записи в БД. Теперь передаем весь объект case_data.
         case_id = await crud.create_case(conn, case_data)
         logger.info(f"Дело успешно создано в БД с ID: {case_id}")
 
-        # 2. Подготовка и запуск фоновой задачи
-        # Преобразуем Pydantic модель в словарь для передачи в фоновую задачу
         case_data_dict = case_data.model_dump(mode='json')
 
         background_tasks.add_task(
@@ -811,12 +792,11 @@ async def submit_case_for_processing(
             case_id,
             case_data_dict,
             rag_engine,
-            request.app.state.pension_types_config,
+            request.app.state.benefit_types_config,
             request.app.state.document_requirements_config
         )
         logger.info(f"Фоновая задача для обработки дела #{case_id} добавлена.")
         
-        # 3. Возвращаем ответ клиенту
         return ProcessOutput(
             case_id=case_id,
             final_status="PROCESSING",
@@ -825,9 +805,6 @@ async def submit_case_for_processing(
 
     except Exception as e:
         logger.error(f"Произошла ошибка при создании дела или запуске фоновой задачи: {e}", exc_info=True)
-        # Откатывать транзакцию не нужно, т.к. `create_case` делает commit. 
-        # Если ошибка произошла после, запись в БД останется со статусом PROCESSING, 
-        # что позволит позже ее отследить и, возможно, перезапустить.
         raise HTTPException(
             status_code=500,
             detail=f"Внутренняя ошибка сервера при обработке вашего запроса: {str(e)}"
@@ -1079,14 +1056,9 @@ async def read_users_me(current_user_data: Dict[str, Any] = Depends(auth.get_cur
         id=current_user_data["user_id"],
         username=current_user_data["username"],
         role=current_user_data["role"],
-        is_active=current_user_data.get("is_active", True) # Берем is_active из токена (если есть) или по умолчанию True
+        is_active=current_user_data.get("is_active", True)
     )
 # --- Конец эндпоинтов для аутентификации ---
-
-MAX_FILE_SIZE_MB = 10
-MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
-ALLOWED_IMAGE_MIME_TYPES = ["image/jpeg", "image/png", "image/gif", "image/bmp", "image/webp"]
-ALLOWED_DOCUMENT_MIME_TYPES = ["application/pdf"]
 
 # --- Эндпоинты для управления документами RAG --- 
 class DocumentListResponse(BaseModel):
@@ -1105,26 +1077,24 @@ async def upload_rag_document(
     request: Request,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(..., description="Файл PDF для загрузки в RAG."),
-    current_user: Dict[str, Any] = Depends(auth.require_admin_role) # Только админ может загружать
+    current_user: Dict[str, Any] = Depends(auth.require_admin_role)
 ):
     logger.info(f"User '{current_user['username']}' (role: {current_user['role']}) attempting to upload RAG document: {file.filename}")
     
-    if file.content_type not in ALLOWED_DOCUMENT_MIME_TYPES:
+    if file.content_type not in ["application/pdf"]:
         logger.warning(f"Disallowed MIME type for RAG document: {file.filename}, type: {file.content_type}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Недопустимый тип файла: {file.content_type}. Разрешенные типы: {', '.join(ALLOWED_DOCUMENT_MIME_TYPES)}"
+            detail=f"Недопустимый тип файла: {file.content_type}. Разрешенные типы: application/pdf"
         )
 
-    # Путь к директории документов из конфигурации RAG
     docs_dir = app.state.rag_engine.config.DOCUMENTS_DIR
-    os.makedirs(docs_dir, exist_ok=True) # Убедимся, что директория существует
+    os.makedirs(docs_dir, exist_ok=True)
     
     file_path = os.path.join(docs_dir, file.filename)
 
     if os.path.exists(file_path):
         logger.warning(f"File {file.filename} already exists in RAG documents directory. Overwriting.")
-        # Можно добавить логику для предотвращения перезаписи или версионирования
 
     try:
         with open(file_path, "wb") as buffer:
@@ -1135,7 +1105,6 @@ async def upload_rag_document(
         logger.error(f"Error saving uploaded RAG document {file.filename}: {e}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Ошибка при сохранении файла: {e}")
 
-    # Запускаем переиндексацию в фоне
     async def run_reindex(rag_engine_instance):
         try:
             logger_bg.info(f"Background task: Starting forced reindex after uploading {file.filename}")
@@ -1149,8 +1118,6 @@ async def upload_rag_document(
         logger.info(f"Background task for RAG index rebuild scheduled after upload of {file.filename}")
     else:
         logger.error("RAG engine not available, cannot schedule reindex task.")
-        # В этом случае файл сохранен, но индекс не будет обновлен автоматически.
-        # Можно вернуть ошибку или предупреждение клиенту.
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Сервис RAG недоступен для переиндексации.")
 
     return DocumentUploadResponse(filename=file.filename, message="Документ успешно загружен. Переиндексация запущена в фоновом режиме.")
@@ -1158,7 +1125,7 @@ async def upload_rag_document(
 @app.get("/api/v1/documents", response_model=DocumentListResponse, tags=["RAG Documents"])
 async def list_rag_documents(
     request: Request,
-    current_user: Dict[str, Any] = Depends(auth.require_manager_role) # Менеджер может просматривать
+    current_user: Dict[str, Any] = Depends(auth.require_manager_role)
 ):
     logger.info(f"User '{current_user['username']}' (role: {current_user['role']}) requested list of RAG documents.")
     docs_dir = app.state.rag_engine.config.DOCUMENTS_DIR
@@ -1179,7 +1146,7 @@ async def delete_rag_document(
     request: Request,
     filename: str,
     background_tasks: BackgroundTasks,
-    current_user: Dict[str, Any] = Depends(auth.require_admin_role) # Только админ может удалять
+    current_user: Dict[str, Any] = Depends(auth.require_admin_role)
 ):
     logger.info(f"User '{current_user['username']}' (role: {current_user['role']}) attempting to delete RAG document: {filename}")
     docs_dir = app.state.rag_engine.config.DOCUMENTS_DIR
@@ -1196,7 +1163,6 @@ async def delete_rag_document(
         logger.error(f"Error deleting RAG document {filename}: {e}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Ошибка при удалении файла: {e}")
 
-    # Запускаем переиндексацию в фоне
     async def run_reindex_after_delete(rag_engine_instance):
         try:
             logger_bg.info(f"Background task: Starting forced reindex after deleting {filename}")
@@ -1210,8 +1176,6 @@ async def delete_rag_document(
         logger.info(f"Background task for RAG index rebuild scheduled after deletion of {filename}")
     else:
         logger.error("RAG engine not available, cannot schedule reindex task after deletion.")
-        # Файл удален, но индекс не будет обновлен. Это может привести к проблемам.
-        # Возможно, стоит вернуть ошибку, если RAG движок недоступен для такой критической операции.
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Сервис RAG недоступен для переиндексации после удаления.")
 
     return DocumentDeleteResponse(filename=filename, message="Документ успешно удален. Переиндексация запущена в фоновом режиме.")
@@ -1234,25 +1198,19 @@ async def delete_case(
     db_conn: AsyncConnection = Depends(get_db_connection),
     current_user_with_role: Dict[str, Any] = Depends(auth.require_manager_role)
 ):
-    """
-    Удаляет дело из базы данных. Доступно администраторам и менеджерам.
-    """
     logger.info(f"User '{current_user_with_role['username']}' (role: {current_user_with_role['role']}) is attempting to delete case ID: {case_id}.")
 
-    # Сначала проверим, существует ли дело
     check_query = select(cases_table.c.id).where(cases_table.c.id == case_id)
     existing_case = await db_conn.execute(check_query)
     if existing_case.scalar_one_or_none() is None:
         logger.warning(f"Attempted to delete non-existent case with ID: {case_id}")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Дело с ID {case_id} не найдено.")
 
-    # Если существует, удаляем
     delete_query = delete(cases_table).where(cases_table.c.id == case_id)
     try:
         result = await db_conn.execute(delete_query)
         await db_conn.commit()
         if result.rowcount == 0:
-            # Эта ситуация маловероятна из-за проверки выше, но для надежности
             logger.error(f"Failed to delete case with ID: {case_id} after existence check.")
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Не удалось удалить дело с ID {case_id}. Возможно, оно было удалено другим процессом.")
         

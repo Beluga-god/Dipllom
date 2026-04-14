@@ -37,22 +37,10 @@ const OcrStepComponent: React.FC<OcrStepComponentProps> = ({
 
   const handleOcrError = (message: string, docType: DocumentTypeToExtract) => {
     setOcrData(null);
-    setError(`Ошибка OCR (${docType}): ${message}`);
-    antdMessage.error(`Ошибка OCR (${docType}): ${message}`);
+    setError(`Ошибка распознавания (${docType}): ${message}`);
+    antdMessage.error(`Ошибка распознавания (${docType}): ${message}`);
     setIsProcessing(false);
   };
-  
-  // OcrUploader должен сам вызывать setIsProcessing(true) в начале загрузки 
-  // и setIsProcessing(false) по завершению (успех/ошибка) через эти коллбэки.
-  // Для этого OcrUploader должен был бы принимать setIsProcessing как проп,
-  // или мы упрощаем и считаем, что isProcessing - это состояние между кликом на upload и результатом.
-  // Здесь я предполагаю, что OcrUploader сам управляет индикацией загрузки файла, 
-  // а isProcessing здесь - это больше про состояние "ожидаем результат от бэкенда".
-  // Чтобы это работало точнее, OcrUploader должен иметь проп onUploadStart/onProcessingStart.
-  // Пока что isProcessing будет активироваться только в этих коллбэках, что не идеально для UI.
-  // Либо OcrUploader сам должен вызывать setIsProcessing перед фактической отправкой файла
-  // через проп вроде `onProcessingStart: () => void;` 
-  // Для упрощения, пока что setIsProcessing(true) можно поставить в начале этих обработчиков.
 
   const handleConfirmAndProceed = () => {
     if (ocrData) {
@@ -183,4 +171,4 @@ const OcrStepComponent: React.FC<OcrStepComponentProps> = ({
   );
 };
 
-export default OcrStepComponent; 
+export default OcrStepComponent;

@@ -1,22 +1,22 @@
 import React, { useEffect } from 'react';
 import { Control, Controller, FieldErrors, UseFormWatch, UseFormSetValue } from 'react-hook-form';
 import { IMaskInput } from 'react-imask';
-import dayjs from 'dayjs'; // Импортируем dayjs
+import dayjs from 'dayjs';
 import {
     Form,
     Input,
     Select,
     Checkbox,
-    DatePicker as AntDatePicker, // Используем Ant Design DatePicker
+    DatePicker as AntDatePicker,
     Row,
     Col,
     Typography,
-    Divider as AntDivider, // Используем Ant Design Divider
+    Divider as AntDivider,
     InputNumber,
 } from 'antd';
 
-import { CaseFormDataTypeForRHF, PersonalData as PersonalDataModel, NameChangeInfo as NameChangeInfoModel } from '../../types'; 
-import CustomDateInput from '../formInputs/CustomDateInput'; // Этот компонент уже адаптирован
+import { CaseFormDataTypeForRHF } from '../../types';
+// import CustomDateInput from '../formInputs/CustomDateInput'; // Не используется, удалено
 // import { formatDateForInput } from '../../utils'; // formatDateForInput не нужен, AntD DatePicker возвращает Dayjs объекты
 
 const { Title } = Typography;

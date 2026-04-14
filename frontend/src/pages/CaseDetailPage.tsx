@@ -4,7 +4,7 @@ import { useParams } from 'react-router-dom';
 import { Typography, Spin, Alert, Descriptions, Tag, Collapse, Button, Space, Modal, message, List, Card, Divider } from 'antd';
 import { getFullCaseData, downloadCaseDocument } from '../services/apiClient';
 import { FullCaseData, ApiError, WorkBookRecordEntry, OtherDocumentData, PersonalData, DisabilityInfo, WorkExperience } from '../types';
-import { ArrowLeftOutlined, DownloadOutlined, InfoCircleOutlined, UserOutlined, IdcardOutlined, SolutionOutlined, PaperClipOutlined, WarningOutlined, ExclamationCircleFilled, ScheduleOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, DownloadOutlined, InfoCircleOutlined, UserOutlined, IdcardOutlined, SolutionOutlined, PaperClipOutlined, WarningOutlined, ExclamationCircleFilled, ScheduleOutlined, GiftOutlined } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
@@ -29,14 +29,14 @@ const CaseDetailPage: React.FC = () => {
         try {
           const id = parseInt(caseId, 10);
           if (isNaN(id)) {
-            throw new Error('Некорректный ID дела.');
+            throw new Error('Некорректный ID обращения.');
           }
           const data = await getFullCaseData(id);
           setCaseData(data);
           setError(null);
         } catch (err) {
           const apiErr = err as ApiError;
-          setError(apiErr.message || `Не удалось загрузить данные дела #${caseId}.`);
+          setError(apiErr.message || `Не удалось загрузить данные обращения #${caseId}.`);
           console.error(`Fetch Case Data Error (ID: ${caseId}):`, apiErr);
         }
         setLoading(false);
@@ -51,7 +51,7 @@ const CaseDetailPage: React.FC = () => {
     confirm({
         title: `Подтвердите загрузку документа`, 
         icon: <ExclamationCircleFilled />, 
-        content: `Вы уверены, что хотите скачать документ по делу #${caseId} в формате ${format.toUpperCase()}?`, 
+        content: `Вы уверены, что хотите скачать документ по обращению #${caseId} в формате ${format.toUpperCase()}?`, 
         okText: 'Да, скачать', 
         cancelText: 'Отмена', 
         async onOk() {
@@ -62,7 +62,7 @@ const CaseDetailPage: React.FC = () => {
               const url = window.URL.createObjectURL(blob);
               const a = document.createElement('a');
               a.href = url;
-              a.download = `case_${caseId}_document.${format}`;
+              a.download = `svo_case_${caseId}_document.${format}`;
               document.body.appendChild(a);
               a.click();
               a.remove();
@@ -80,7 +80,7 @@ const CaseDetailPage: React.FC = () => {
   };
 
   if (loading) {
-    return <div style={{ textAlign: 'center', margin: '20px 0' }}><Spin size="large" tip={`Загрузка данных дела #${caseId}...`} /></div>;
+    return <div style={{ textAlign: 'center', margin: '20px 0' }}><Spin size="large" tip={`Загрузка данных обращения #${caseId}...`} /></div>;
   }
 
   if (error) {
@@ -88,32 +88,46 @@ const CaseDetailPage: React.FC = () => {
   }
 
   if (!caseData) {
-    return <Alert message="Данные не найдены" description={`Не удалось найти информацию по делу #${caseId}.`} type="warning" showIcon />;
+    return <Alert message="Данные не найдены" description={`Не удалось найти информацию по обращению #${caseId}.`} type="warning" showIcon />;
   }
 
   const renderStatusTag = (status: string | null) => {
     if (!status) return <Tag color="default">Неизвестно</Tag>;
     switch (status) {
-      case 'СООТВЕТСТВУЕТ': case 'COMPLETED': return <Tag color="success">{status}</Tag>;
+      case 'СООТВЕТСТВУЕТ': case 'COMPLETED': return <Tag color="success">{status === 'COMPLETED' ? 'ЗАВЕРШЕНО' : status}</Tag>;
       case 'НЕ СООТВЕТСТВУЕТ': return <Tag color="warning">{status}</Tag>;
-      case 'PROCESSING': return <Tag color="processing">В ОБРАБОТКЕ</Tag>; // AntD 'processing' color
+      case 'PROCESSING': return <Tag color="processing">В ОБРАБОТКЕ</Tag>;
       case 'ERROR_PROCESSING': case 'FAILED': return <Tag color="error">{status}</Tag>;
       default: return <Tag color="blue">{status}</Tag>;
     }
   };
 
+  // Функция для получения отображаемого названия типа льготы
+  const getBenefitTypeDisplayName = (benefitTypeId: string): string => {
+    // Здесь можно добавить маппинг ID в читаемые названия
+    const benefitTypeMap: Record<string, string> = {
+      'monthly_payment': 'Ежемесячная денежная выплата',
+      'housing_benefits': 'Жилищные льготы',
+      'medical_support': 'Медицинская помощь',
+      'educational_benefits': 'Образовательные льготы',
+      'tax_benefits': 'Налоговые льготы',
+      'land_benefits': 'Земельный участок',
+    };
+    return benefitTypeMap[benefitTypeId] || benefitTypeId;
+  };
+
   return (
     <div>
       <Button type="link" icon={<ArrowLeftOutlined />} onClick={() => window.history.back()} style={{ marginBottom: '16px', paddingLeft: 0 }}>
-        Назад к истории
+        Назад к списку
       </Button>
-      <Title level={2} style={{ marginBottom: '5px' }}>Детали дела <Text type="secondary">#{caseData.id}</Text></Title>
+      <Title level={2} style={{ marginBottom: '5px' }}>Детали обращения <Text type="secondary">#{caseData.id}</Text></Title>
       <Paragraph>
-        <Text strong>Тип пенсии:</Text> {caseData.pension_type} <br />
+        <Text strong><GiftOutlined /> Тип поддержки:</Text> {getBenefitTypeDisplayName(caseData.benefit_type)} <br />
         <Text strong>Статус:</Text> {renderStatusTag(caseData.final_status)} <br />
         <Text strong>Создано:</Text> {new Date(caseData.created_at).toLocaleString()} <br />
         {caseData.updated_at && <><Text strong>Обновлено:</Text> {new Date(caseData.updated_at).toLocaleString()} <br /></>}
-        {typeof caseData.rag_confidence === 'number' && <><Text strong>Уверенность RAG:</Text> {(caseData.rag_confidence * 100).toFixed(1)}%</>}
+        {typeof caseData.rag_confidence === 'number' && <><Text strong>Уверенность системы:</Text> {(caseData.rag_confidence * 100).toFixed(1)}%</>}
       </Paragraph>
 
       {caseData.final_explanation && (
@@ -126,9 +140,6 @@ const CaseDetailPage: React.FC = () => {
 
               if (h2Match && h2Match[1]) {
                 cardTitle = h2Match[1].trim();
-                // Удаляем строку с заголовком H2 из содержимого, 
-                // плюс один символ новой строки, если он есть сразу после заголовка.
-                // Это предотвратит двойной отступ, если после H2 идет пустая строка.
                 cardContent = section.substring(h2Match[0].length);
                 if (cardContent.startsWith('\n')) {
                   cardContent = cardContent.substring(1);
@@ -138,7 +149,7 @@ const CaseDetailPage: React.FC = () => {
               return (
                 <Card 
                   key={index} 
-                  title={cardTitle} // Используем извлеченный заголовок H2
+                  title={cardTitle}
                   style={{ 
                     marginBottom: '16px', 
                     background: '#fff', 
@@ -175,10 +186,10 @@ const CaseDetailPage: React.FC = () => {
 
       <Space style={{marginBottom: '20px'}}>
           <Button icon={<DownloadOutlined />} onClick={() => handleDownload('pdf')} loading={downloading.pdf} disabled={downloading.docx}>
-              Скачать PDF
+              Скачать заключение (PDF)
           </Button>
           <Button icon={<DownloadOutlined />} onClick={() => handleDownload('docx')} loading={downloading.docx} disabled={downloading.pdf}>
-              Скачать DOCX
+              Скачать заключение (DOCX)
           </Button>
       </Space>
 
@@ -253,11 +264,11 @@ const CaseDetailPage: React.FC = () => {
           </Panel>
         )}
 
-        <Panel header={<Text strong><PaperClipOutlined /> Дополнительная информация и документы</Text>} key="additional">
+        <Panel header={<Text strong><PaperClipOutlined /> Дополнительная информация</Text>} key="additional">
           <Descriptions bordered column={1} size="small">
             <Descriptions.Item label="Пенсионные баллы (ИПК)">{caseData.pension_points ?? '-'}</Descriptions.Item>
-            <Descriptions.Item label="Льготы">{caseData.benefits && caseData.benefits.length > 0 ? caseData.benefits.join(', ') : '-'}</Descriptions.Item>
-            <Descriptions.Item label="Представленные стандартные документы">{caseData.submitted_documents && caseData.submitted_documents.length > 0 ? caseData.submitted_documents.join(', ') : '-'}</Descriptions.Item>
+            <Descriptions.Item label="Заявленные льготы">{caseData.benefits && caseData.benefits.length > 0 ? caseData.benefits.join(', ') : '-'}</Descriptions.Item>
+            <Descriptions.Item label="Представленные документы">{caseData.submitted_documents && caseData.submitted_documents.length > 0 ? caseData.submitted_documents.join(', ') : '-'}</Descriptions.Item>
             <Descriptions.Item label="Наличие некорректных документов">{caseData.has_incorrect_document ? <Tag color="error">Да</Tag> : <Tag color="success">Нет</Tag>}</Descriptions.Item>
           </Descriptions>
           {caseData.other_documents_extracted_data && caseData.other_documents_extracted_data.length > 0 && (

@@ -40,7 +40,7 @@ const OcrTasksPage: React.FC = () => {
       setStatsData(data);
     } catch (err) {
       const apiErr = err as ApiError;
-      setError(apiErr.message || 'Не удалось загрузить статистику OCR задач.');
+      setError(apiErr.message || 'Не удалось загрузить статистику задач распознавания.');
       console.error('Error fetching OCR tasks stats:', apiErr);
       setStatsData(null);
     } finally {
@@ -55,7 +55,7 @@ const OcrTasksPage: React.FC = () => {
   if (loading && !statsData) {
     return (
       <div style={{ textAlign: 'center', padding: '50px' }}>
-        <Spin size="large" tip="Загрузка статистики OCR задач..." />
+        <Spin size="large" tip="Загрузка статистики задач распознавания..." />
       </div>
     );
   }
@@ -81,7 +81,7 @@ const OcrTasksPage: React.FC = () => {
   if (!statsData) {
     return (
       <Card>
-        <Empty description="Данные статистики OCR задач отсутствуют или не удалось их загрузить.">
+        <Empty description="Данные статистики задач распознавания отсутствуют или не удалось их загрузить.">
             <Button type="primary" icon={<SyncOutlined />} onClick={fetchStats} loading={loading}>
                 Обновить
             </Button>
@@ -98,7 +98,7 @@ const OcrTasksPage: React.FC = () => {
         <Col>
           <Title level={3} style={{ margin: 0 }}>
             <ExperimentOutlined style={{ marginRight: 8, color: '#1890ff' }} />
-            Статистика OCR Задач
+            Статистика задач распознавания
           </Title>
         </Col>
         <Col>
@@ -151,23 +151,23 @@ const OcrTasksPage: React.FC = () => {
       <Row gutter={[16, 24]}>
         {status_specific_counts && Object.entries(status_specific_counts).map(([status, count]) => {
           let icon = <ExclamationCircleOutlined />;
-          let color = '#d9d9d9'; // Серый по умолчанию
+          let color = '#d9d9d9';
           let cardBg = '#fafafa';
           let title = status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
 
           if (status === 'PROCESSING') {
             icon = <HourglassOutlined />;
-            color = '#1890ff'; // Синий
+            color = '#1890ff';
             cardBg = '#e6f7ff';
             title = 'В обработке (всего)';
           } else if (status === 'COMPLETED') {
             icon = <CheckCircleOutlined />;
-            color = '#52c41a'; // Зеленый
+            color = '#52c41a';
             cardBg = '#f6ffed';
             title = 'Завершено успешно';
           } else if (status === 'FAILED') {
             icon = <CloseCircleOutlined />;
-            color = '#f5222d'; // Красный
+            color = '#f5222d';
             cardBg = '#fff1f0';
             title = 'Завершено с ошибкой';
           }

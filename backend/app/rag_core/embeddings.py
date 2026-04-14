@@ -12,8 +12,12 @@ from llama_index.core.bridge.pydantic import Field, PrivateAttr
 from llama_index.core.callbacks.base import CallbackManager
 from llama_index.core.constants import DEFAULT_EMBED_BATCH_SIZE
 
+# # Модель по умолчанию
+# DEFAULT_JINA_V3_MODEL = "jinaai/jina-embeddings-v3"
+
 # Модель по умолчанию
-DEFAULT_JINA_V3_MODEL = "jinaai/jina-embeddings-v3"
+DEFAULT_JINA_V3_MODEL = "sentence-transformers/all-MiniLM-L6-v2"    
+
 
 class JinaV3Embedding(BaseEmbedding):
     """
@@ -52,7 +56,7 @@ class JinaV3Embedding(BaseEmbedding):
             self._model = SentenceTransformer(
                 model_name, 
                 device=device,
-                trust_remote_code=trust_remote_code
+                # trust_remote_code=trust_remote_code
             )
             # Сохраняем устройство, которое фактически используется моделью
             self._device = str(self._model.device) 

@@ -3,13 +3,13 @@ import { Control, Controller, FieldErrors, UseFormGetValues, UseFormSetValue, Us
 import { Form, InputNumber, Checkbox, Divider, Typography, message as antdMessage, Row, Col, Button } from 'antd';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import type { 
-    CaseFormDataTypeForRHF, // Глобальный тип для формы RHF
-    OtherDocumentData, // Для данных из OCR
+    CaseFormDataTypeForRHF,
+    OtherDocumentData,
     DocumentTypeToExtract, 
     OcrResultData,
     DocumentDetail
 } from '../../types';
-import type { UploadFile } from 'antd/es/upload'; // Ensure UploadFile is imported
+import type { UploadFile } from 'antd/es/upload';
 
 import TagInput from '../formInputs/TagInput';
 import OcrUploader from '../formInputs/OcrUploader';
@@ -18,6 +18,8 @@ const { Title, Text, Paragraph } = Typography;
 
 const BENEFIT_CONFIRMING_DOCUMENT_TYPES = [
     "Военный билет",
+    "Удостоверение участника СВО",
+    "Справка о ранении",
     "Документ, подтверждающий особые условия труда",
     "Документ, подтверждающий педагогический стаж",
     "Документ, подтверждающий медицинский стаж",
@@ -34,7 +36,7 @@ const BENEFIT_CONFIRMING_DOCUMENT_TYPES = [
 interface AdditionalInfoStepProps {
     control: Control<CaseFormDataTypeForRHF>;
     errors: FieldErrors<CaseFormDataTypeForRHF>;
-    pensionType: string | null;
+    benefitType: string | null;
     setValue: UseFormSetValue<CaseFormDataTypeForRHF>;
     getValues: UseFormGetValues<CaseFormDataTypeForRHF>;
     trigger: UseFormTrigger<CaseFormDataTypeForRHF>;
@@ -45,7 +47,7 @@ interface AdditionalInfoStepProps {
 const AdditionalInfoStep: React.FC<AdditionalInfoStepProps> = ({
     control,
     errors,
-    pensionType,
+    benefitType,
     setValue,
     getValues,
     trigger,
@@ -58,8 +60,6 @@ const AdditionalInfoStep: React.FC<AdditionalInfoStepProps> = ({
         defaultValue: [] 
     });
     const [displayedOtherDocs, setDisplayedOtherDocs] = useState<Partial<OtherDocumentData>[]>(watchedOtherDocs || []);
-
-    // State to track if the batch of 'other' documents is currently processing
     const [isOtherDocsBatchProcessing, setIsOtherDocsBatchProcessing] = useState(false);
 
     useEffect(() => {
@@ -137,27 +137,27 @@ const AdditionalInfoStep: React.FC<AdditionalInfoStepProps> = ({
     };
 
     const handleOtherDocProcessingStart = (docType: DocumentTypeToExtract, file?: UploadFile) => {
-        // If file is undefined, it means a batch is starting
         if (docType === 'other' && file === undefined) { 
             setIsOtherDocsBatchProcessing(true);
         }
-        // If file is defined, it means a single file upload (which should not happen if allowMultipleFiles is true and used for batch)
-        // or it could be the first file in a batch, depending on OcrUploader's onProcessingStart logic.
-        // For now, we primarily use this to set batch processing state.
     };
+
+    // Определяем, нужно ли показывать поле "Пенсионные баллы"
+    // Показываем для типов льгот, связанных с пенсией по старости
+    const shouldShowPensionPoints = benefitType === 'retirement_standard' || benefitType === 'monthly_payment';
 
     return (
         <div style={{ maxWidth: '700px', margin: '0 auto' }}>
             <Title level={4} style={{ marginBottom: '20px', textAlign: 'center' }}>Дополнительная информация</Title>
 
-            {pensionType === 'retirement_standard' && (
+            {shouldShowPensionPoints && (
                 <Form.Item
                     label="Пенсионные баллы (ИПК)"
                     name="pension_points"
                     validateStatus={errors.pension_points ? 'error' : ''}
                     help={errors.pension_points?.message as string | undefined}
                     rules={[
-                        { required: pensionType === 'retirement_standard', message: "Пенсионные баллы обязательны" },
+                        { required: shouldShowPensionPoints, message: "Пенсионные баллы обязательны" },
                     ]}
                 >
                     <Controller
@@ -191,9 +191,9 @@ const AdditionalInfoStep: React.FC<AdditionalInfoStepProps> = ({
                     onOcrSuccess={handleOtherDocOcrSuccess}
                     onOcrError={handleOtherDocOcrError}
                     uploaderTitle="Перетащите или выберите файл(ы) для доп. документов"
-                    allowMultipleFiles={true} // Разрешаем несколько файлов
-                    onBatchFinished={handleOtherDocBatchFinished} // Обрабатываем завершение пачки
-                    onProcessingStart={handleOtherDocProcessingStart} // Обрабатываем начало обработки (пачки)
+                    allowMultipleFiles={true}
+                    onBatchFinished={handleOtherDocBatchFinished}
+                    onProcessingStart={handleOtherDocProcessingStart}
                 />
             </Form.Item>
 
@@ -223,26 +223,24 @@ const AdditionalInfoStep: React.FC<AdditionalInfoStepProps> = ({
             )}
             <Divider style={{ margin: '24px 0' }}/>
 
-            {pensionType !== 'disability_social' && (
-                <Form.Item
-                    label="Льготы (введите или будут добавлены автоматически после OCR)"
+            <Form.Item
+                label="Льготы (введите или будут добавлены автоматически после OCR)"
+                name="benefits"
+                validateStatus={errors.benefits ? 'error' : ''}
+                help={errors.benefits?.message as string | undefined}
+            >
+                <Controller
                     name="benefits"
-                    validateStatus={errors.benefits ? 'error' : ''}
-                    help={errors.benefits?.message as string | undefined}
-                >
-                    <Controller
-                        name="benefits"
-                        control={control}
-                        render={({ field }) => (
-                            <TagInput 
-                                fieldOnChange={field.onChange} 
-                                value={field.value}
-                                placeholder="Добавить льготу и нажать Enter"
-                            />
-                        )}
-                    />
-                </Form.Item>
-            )}
+                    control={control}
+                    render={({ field }) => (
+                        <TagInput 
+                            fieldOnChange={field.onChange} 
+                            value={field.value}
+                            placeholder="Добавить льготу и нажать Enter"
+                        />
+                    )}
+                />
+            </Form.Item>
 
             <Form.Item
                 label="Представленные стандартные документы (введите или будут добавлены автоматически после OCR)"

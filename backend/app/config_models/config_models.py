@@ -12,42 +12,42 @@ class DocumentDetail(BaseModel):
     ocr_type: Optional[str] = None
 
 
-class PensionTypeDocuments(BaseModel):
-    """Модель для списка документов, требуемых для определенного типа пенсии."""
+class BenefitTypeDocuments(BaseModel):
+    """Модель для списка документов, требуемых для определенного типа льготы."""
     documents: List[DocumentDetail]
 
 
-class PensionTypeInfo(BaseModel):
-    """Модель для информации о типе пенсии."""
+class BenefitTypeInfo(BaseModel):
+    """Модель для информации о типе льготы."""
     id: str
     display_name: str
     description: str
 
 
-class PensionTypesConfig(BaseModel):
-    """Модель для списка всех типов пенсий."""
-    pension_types: List[PensionTypeInfo]
+class BenefitTypesConfig(BaseModel):
+    """Модель для списка всех типов льгот."""
+    benefit_types: List[BenefitTypeInfo]
     
 
 class DocumentRequirementsConfig(BaseModel):
-    """Модель для требований к документам по всем типам пенсий."""
-    requirements: Dict[str, PensionTypeDocuments]
+    """Модель для требований к документам по всем типам льгот."""
+    requirements: Dict[str, BenefitTypeDocuments]
     
     
-def load_pension_types_config(data: List[Dict[str, Any]]) -> List[PensionTypeInfo]:
+def load_benefit_types_config(data: List[Dict[str, Any]]) -> List[BenefitTypeInfo]:
     """
-    Загружает и валидирует конфигурацию типов пенсий.
+    Загружает и валидирует конфигурацию типов льгот.
     
     Args:
-        data: Данные из JSON-файла pension_types.json
+        data: Данные из JSON-файла benefit_types.json
         
     Returns:
-        Список валидированных объектов PensionTypeInfo
+        Список валидированных объектов BenefitTypeInfo
     """
-    return [PensionTypeInfo(**item) for item in data]
+    return [BenefitTypeInfo(**item) for item in data]
 
 
-def load_document_requirements_config(data: Dict[str, Dict[str, Any]]) -> Dict[str, PensionTypeDocuments]:
+def load_document_requirements_config(data: Dict[str, Dict[str, Any]]) -> Dict[str, BenefitTypeDocuments]:
     """
     Загружает и валидирует конфигурацию требований к документам.
     
@@ -55,6 +55,6 @@ def load_document_requirements_config(data: Dict[str, Dict[str, Any]]) -> Dict[s
         data: Данные из JSON-файла document_requirements.json
         
     Returns:
-        Словарь с требованиями к документам для каждого типа пенсии
+        Словарь с требованиями к документам для каждого типа льготы
     """
-    return {pension_type_id: PensionTypeDocuments(**reqs) for pension_type_id, reqs in data.items()} 
+    return {benefit_type_id: BenefitTypeDocuments(**reqs) for benefit_type_id, reqs in data.items()}

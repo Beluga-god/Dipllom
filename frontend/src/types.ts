@@ -11,7 +11,7 @@ export interface PersonalData {
   middle_name: string | null;
   birth_date: string; // YYYY-MM-DD
   snils: string;
-  gender: string; // "Мужской", "Женский" - как в API, или предусмотреть маппинг
+  gender: string; // "Мужской", "Женский"
   citizenship: string;
   name_change_info: NameChangeInfo | null;
   dependents: number;
@@ -23,7 +23,6 @@ export interface DisabilityInfo {
   cert_number: string | null;
 }
 
-// Новые типы для событийно-ориентированной модели трудовой книжки
 export type WorkBookEventType = "ПРИЕМ" | "ПЕРЕВОД" | "УВОЛЬНЕНИЕ" | "НАГРАЖДЕНИЕ" | "ДРУГОЕ";
 
 export interface WorkBookEventRecord {
@@ -34,17 +33,14 @@ export interface WorkBookEventRecord {
     raw_text: string;
 }
 
-// Обновленная запись о периоде работы. Используется как в WorkExperience, так и в WorkBookData.
 export interface WorkBookRecordEntry {
   organization: string | null;
   position: string | null;
   date_in: string | null; // YYYY-MM-DD
   date_out: string | null; // YYYY-MM-DD
-  // Поле для UI, может не присутствовать в данных от OCR, но используется в форме.
   special_conditions?: boolean | null;
 }
 
-// Новая модель для трудового стажа, консистентная с бэкендом
 export interface WorkExperience {
   calculated_total_years?: number | null;
   records?: WorkBookRecordEntry[] | null;
@@ -54,7 +50,7 @@ export interface WorkExperience {
 export interface OtherDocumentData {
   identified_document_type: string | null;
   standardized_document_type: string | null;
-  extracted_fields: Record<string, any> | null; // object | null
+  extracted_fields: Record<string, any> | null;
   multimodal_assessment: string | null;
   text_llm_reasoning: string | null;
   birth_place: string | null;
@@ -62,12 +58,12 @@ export interface OtherDocumentData {
 
 export interface CaseDataInput {
   personal_data: PersonalData;
-  pension_type: string; // ID из /api/v1/pension_types
+  benefit_type: string; // ID из /api/v1/benefit_types (типы льгот для участников СВО)
   disability: DisabilityInfo | null;
   work_experience: WorkExperience | null;
   pension_points: number | null;
   benefits: string[] | null;
-  submitted_documents: string[] | null; // ID из /api/v1/pension_documents/{pension_type_id}
+  submitted_documents: string[] | null; // ID из /api/v1/benefit_documents/{benefit_type_id}
   has_incorrect_document: boolean | null;
   other_documents_extracted_data: OtherDocumentData[] | null;
 }
@@ -76,7 +72,7 @@ export interface ErrorDetail {
   code: string | null;
   message: string | null;
   source: string | null;
-  details: Record<string, any> | null; // object | null
+  details: Record<string, any> | null;
 }
 
 export interface ProcessOutput {
@@ -90,8 +86,8 @@ export interface ProcessOutput {
 
 export interface CaseHistoryEntry {
   id: number;
-  created_at: string; // datetime, ISO 8601
-  pension_type: string;
+  created_at: string; // ISO 8601
+  benefit_type: string; // Тип запрашиваемой льготы
   final_status: string;
   final_explanation: string | null;
   rag_confidence: number | null;
@@ -100,14 +96,12 @@ export interface CaseHistoryEntry {
 
 export interface FullCaseData extends CaseDataInput {
   id: number;
-  created_at: string; // datetime, ISO 8601
-  updated_at: string | null; // datetime, ISO 8601
-  errors: Record<string, any>[] | null; // Array<object>
+  created_at: string; // ISO 8601
+  updated_at: string | null; // ISO 8601
+  errors: Record<string, any>[] | null;
   final_status: string | null;
   final_explanation: string | null;
   rag_confidence: number | null;
-  // Поля из CaseDataInput здесь уже есть через extends,
-  // они могут быть null, если данные не были предоставлены или ошибки парсинга
 }
 
 export interface PassportData {
@@ -134,7 +128,6 @@ export interface SnilsData {
   birth_place: string | null;
 }
 
-// Обновленная модель данных из ТК, которую возвращает OCR
 export interface WorkBookData {
   raw_events: WorkBookEventRecord[];
   records: WorkBookRecordEntry[];
@@ -142,7 +135,7 @@ export interface WorkBookData {
 }
 
 export interface OcrTaskSubmitResponse {
-  task_id: string; // UUID
+  task_id: string;
   status: "PROCESSING";
   message: string;
 }
@@ -154,10 +147,10 @@ export type OcrResultData = PassportData | SnilsData | WorkBookData | OtherDocum
 export interface OcrTaskStatusResponse {
   task_id: string;
   status: OcrTaskStatus;
-  data: OcrResultData | null; // Структура зависит от document_type при создании задачи
+  data: OcrResultData | null;
   error: {
     detail: string;
-    type: string; // ИмяОшибки
+    type: string;
   } | null;
 }
 
@@ -169,7 +162,7 @@ export interface TasksStatsResponse {
     PROCESSING: number;
     COMPLETED: number;
     FAILED: number;
-    [key: string]: number; // Для возможных других статусов
+    [key: string]: number;
   };
 }
 
@@ -190,19 +183,18 @@ export interface DependencyStatus {
 
 export interface HealthCheckResponse {
   overall_status: "healthy" | "unhealthy";
-  timestamp: string; // datetime, ISO 8601
+  timestamp: string; // ISO 8601
   dependencies: DependencyStatus[];
 }
 
-// Типы для эндпоинтов конфигурации
-
-export interface PensionTypeInfo {
+// Типы для эндпоинтов конфигурации (льготы СВО)
+export interface BenefitTypeInfo {
   id: string;
   display_name: string;
   description: string;
 }
 
-// Типы для пользователя, согласно API документации
+// Типы для пользователя
 export interface User {
   id: number;
   username: string;
@@ -210,15 +202,11 @@ export interface User {
   is_active: boolean;
 }
 
-// Тип для ответа от эндпоинта /token, согласно API документации
 export interface TokenResponse {
   access_token: string;
   token_type: "bearer";
 }
 
-// Типы для параметров запросов и тел
-
-// Для POST /api/v1/document_extractions
 export type DocumentTypeToExtract = "passport" | "snils" | "work_book" | "other";
 
 export interface DocumentExtractionParams {
@@ -227,17 +215,14 @@ export interface DocumentExtractionParams {
   ttl_hours?: number; // 1-168
 }
 
-// Для GET /api/v1/cases/{case_id}/document
 export type DocumentFormat = "pdf" | "docx";
 
-// Стандартизированный формат ошибки (из раздела 5)
 export interface StandardErrorResponse {
     error_code: string;
     message: string;
-    details?: any; // Может быть объектом или массивом
+    details?: any;
 }
 
-// Детали ошибки валидации (из раздела 5)
 export interface ValidationErrorDetailItem {
     loc: (string | number)[];
     msg: string;
@@ -247,11 +232,10 @@ export interface HttpValidationError {
     detail: ValidationErrorDetailItem[];
 }
 
-// Для стандартизированных ошибок (новый формат)
 export interface StandardizedValidationErrorDetail {
-    field: string; // "body.personal_data.snils"
+    field: string;
     message: string;
-    type: string; // "value_error"
+    type: string;
 }
 export interface StandardizedValidationErrorResponse {
     error_code: "VALIDATION_ERROR";
@@ -259,23 +243,19 @@ export interface StandardizedValidationErrorResponse {
     details: StandardizedValidationErrorDetail[];
 }
 
-// Общий тип для ошибки API, который будет использоваться в API клиенте
 export interface ApiError {
   status: number;
-  message: string; // Человекочитаемое сообщение
-  errorCode?: string; // Код ошибки из StandardErrorResponse
-  validationDetails?: StandardizedValidationErrorDetail[] | ValidationErrorDetailItem[]; // Детали валидации
-  rawError?: any; // Исходный объект ошибки от сервера
+  message: string;
+  errorCode?: string;
+  validationDetails?: StandardizedValidationErrorDetail[] | ValidationErrorDetailItem[];
+  rawError?: any;
 }
 
-// Тип для данных формы React Hook Form (RHF)
-// Основан на CaseDataInput, но с учетом того, что поля могут быть частично заполнены
-// или иметь немного другую структуру на стороне UI перед отправкой.
+// Тип для данных формы React Hook Form
 export interface CaseFormDataTypeForRHF {
-  pension_type?: string; // ID из /api/v1/pension_types
+  benefit_type?: string; // ID из /api/v1/benefit_types
   personal_data?: Partial<PersonalData> & { 
-    name_change_info_checkbox?: boolean; // Вспомогательное поле для UI
-    // Поля паспорта, которые могут быть отдельными в UI, но часть PersonalData в API
+    name_change_info_checkbox?: boolean;
     passport_series?: string;
     passport_number?: string;
     passport_issue_date?: string; 
@@ -284,17 +264,14 @@ export interface CaseFormDataTypeForRHF {
     birth_place?: string;
   };
   disability?: Partial<DisabilityInfo> | null;
-  work_experience?: Partial<WorkExperience> & {
-    // Если есть специфичные для UI поля в work_experience, добавляем сюда
-  };
+  work_experience?: Partial<WorkExperience>;
   pension_points?: number | null;
-  benefits?: string; // В RHF может храниться как строка тегов
-  submitted_documents?: string; // В RHF может храниться как строка тегов
+  benefits?: string;
+  submitted_documents?: string;
   has_incorrect_document?: boolean;
-  other_documents_extracted_data?: Partial<OtherDocumentData>[]; // Массив частично заполненных данных
+  other_documents_extracted_data?: Partial<OtherDocumentData>[];
   
-  // Могут быть и другие поля, специфичные для UI или временные
-  [key: string]: any; // Для гибкости, если есть другие поля в RHF
+  [key: string]: any;
 }
 
 // Типы для RAG документов

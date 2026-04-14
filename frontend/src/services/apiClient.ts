@@ -11,7 +11,7 @@ import {
     HealthCheckResponse,
     OcrTaskStatusResponse,
     OcrTaskSubmitResponse,
-    PensionTypeInfo,
+    BenefitTypeInfo,
     ProcessOutput,
     StandardErrorResponse,
     TasksStatsResponse,
@@ -29,7 +29,7 @@ import {
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
 
 // --- Управление токеном --- 
-const TOKEN_KEY = 'pfr_ai_auth_token';
+const TOKEN_KEY = 'svo_ai_auth_token';
 
 export function storeToken(token: string): void {
     localStorage.setItem(TOKEN_KEY, token);
@@ -46,7 +46,7 @@ export function removeToken(): void {
 
 async function handleApiResponse<T>(response: Response): Promise<T> {
     if (response.status === 204) { // No Content
-        return {} as T; // или null, или другое подходящее значение
+        return {} as T;
     }
 
     const contentType = response.headers.get('content-type');
@@ -58,10 +58,6 @@ async function handleApiResponse<T>(response: Response): Promise<T> {
         // Для файлов возвращаем Blob, обработка будет в вызывающей функции
         return response.blob() as Promise<T>; 
     } else {
-        // Если контент не JSON и не известный файл, попробуем как текст (для отладки)
-        // В реальном приложении здесь может быть более строгая обработка
-        // data = { message: await response.text() };
-        // Для простоты, если не JSON и не файл, пока считаем, что это может быть ошибка без JSON тела
         if (!response.ok) {
              const errorText = await response.text();
              console.warn("API Response not JSON and not OK:", response.status, errorText);
@@ -71,7 +67,7 @@ async function handleApiResponse<T>(response: Response): Promise<T> {
                 rawError: errorText
             } as ApiError;
         }
-        return {} as T; // Если response.ok, но нет контента, возвращаем пустой объект
+        return {} as T;
     }
 
     if (!response.ok) {
@@ -81,23 +77,20 @@ async function handleApiResponse<T>(response: Response): Promise<T> {
         let validationDetails: any | undefined;
 
         if (data && typeof data === 'object') {
-            // Проверяем на StandardErrorResponse (новый формат)
             if ('error_code' in data && 'message' in data) {
                 const standardError = data as StandardErrorResponse;
                 errorMessage = standardError.message;
                 errorCode = standardError.error_code;
                 if (standardError.error_code === 'VALIDATION_ERROR' && standardError.details) {
-                    validationDetails = standardError.details as any; // StandardizedValidationErrorDetail[]
+                    validationDetails = standardError.details as any;
                 }
             } 
-            // Проверяем на FastAPI HttpValidationError (старый формат)
             else if ('detail' in data && Array.isArray((data as HttpValidationError).detail)) {
                 const validationError = data as HttpValidationError;
                 errorMessage = 'Ошибка валидации. Проверьте введенные данные.';
                 errorCode = 'FASTAPI_VALIDATION_ERROR';
-                validationDetails = validationError.detail; // ValidationErrorDetailItem[]
+                validationDetails = validationError.detail;
             } 
-            // Общий случай для других JSON ошибок
             else if ('detail' in data && typeof data.detail === 'string') {
                 errorMessage = data.detail;
             } else if ('message' in data && typeof data.message === 'string') {
@@ -120,7 +113,6 @@ async function request<T>(path: string, options: RequestInit = {}, rawResponse: 
     const token = getToken();
     const headers = new Headers(options.headers || {});
     
-    // Не добавляем Content-Type для FormData, браузер сделает это сам с правильным boundary
     if (!(options.body instanceof FormData)) {
         if (!headers.has('Content-Type')) {
              headers.set('Content-Type', 'application/json');
@@ -152,8 +144,6 @@ export async function loginUser(usernameValue: string, passwordValue: string): P
         .map(key => encodeURIComponent(key) + '=' + encodeURIComponent(details[key]))
         .join('&');
 
-    // Передаем пустой объект вместо `${API_BASE_URL}/auth/token`
-    // и устанавливаем Content-Type как application/x-www-form-urlencoded
     const response = await fetch(`${API_BASE_URL}/auth/token`, {
         method: 'POST',
         headers: {
@@ -168,14 +158,14 @@ export async function getCurrentUser(): Promise<User> {
     return request<User>('/users/me');
 }
 
-// --- Конфигурация и Справочники ---
+// --- Конфигурация и Справочники (льготы СВО) ---
 
-export async function getPensionTypes(): Promise<PensionTypeInfo[]> {
-    return request<PensionTypeInfo[]>('/pension_types');
+export async function getBenefitTypes(): Promise<BenefitTypeInfo[]> {
+    return request<BenefitTypeInfo[]>('/benefit_types');
 }
 
-export async function getPensionDocuments(pensionTypeId: string): Promise<DocumentDetail[]> {
-    return request<DocumentDetail[]>(`/pension_documents/${pensionTypeId}`);
+export async function getBenefitDocuments(benefitTypeId: string): Promise<DocumentDetail[]> {
+    return request<DocumentDetail[]>(`/benefit_documents/${benefitTypeId}`);
 }
 
 export async function getStandardDocumentNames(): Promise<string[]> {
@@ -206,9 +196,8 @@ export async function getCaseHistory(skip: number = 0, limit: number = 10): Prom
 export async function downloadCaseDocument(caseId: number, format: DocumentFormat): Promise<Blob> {
     const response = await request<Response>(`/cases/${caseId}/document?format=${format}`, {
         method: 'GET',
-    }, true); // Pass true to get raw response
+    }, true);
     if (!response.ok) {
-        // Try to parse error from body if it's not a success response
         const errorData = await response.json().catch(() => ({ detail: response.statusText }));
         throw new Error(errorData.detail || 'Failed to download document');
     }
@@ -238,7 +227,7 @@ export async function submitOcrTask(params: DocumentExtractionParams): Promise<O
 
     return request<OcrTaskSubmitResponse>('/document_extractions', {
         method: 'POST',
-        body: formData, // Content-Type будет установлен браузером для FormData
+        body: formData,
     });
 }
 
@@ -266,7 +255,6 @@ export async function uploadRagDocument(file: File): Promise<DocumentUploadRespo
     return request<DocumentUploadResponse>('/documents', {
         method: 'POST',
         body: formData,
-        // Заголовки Content-Type для FormData устанавливаются браузером автоматически
     });
 }
 
