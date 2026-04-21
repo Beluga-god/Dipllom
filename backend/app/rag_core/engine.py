@@ -649,10 +649,10 @@ class SVORAG:
             full_name = " ".join(filter(None, full_name_parts))
             age = calculate_age(pd.birth_date)
             
-            benefit_type_display = case_data.pension_type
+            benefit_type_display = case_data.benefit_type
             if self.benefit_types_config:
                 for bt_info in self.benefit_types_config:
-                    if bt_info.id == case_data.pension_type:
+                    if bt_info.id == case_data.benefit_type:
                         benefit_type_display = bt_info.display_name
                         break
             else:

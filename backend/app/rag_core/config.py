@@ -13,7 +13,8 @@ DOCUMENTS_DIR = os.path.join(BACKEND_DIR, "data") # Директория с до
 
 # --- Модели ---
 HF_EMBED_MODEL_NAME = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-OLLAMA_LLM_MODEL_NAME = "qwen3:latest" # Замените на вашу модель, если нужно
+# OLLAMA_LLM_MODEL_NAME = "qwen3:latest" # Замените на вашу модель, если нужно
+OLLAMA_LLM_MODEL_NAME = "qwen2.5:3b"
 OLLAMA_BASE_URL = "http://localhost:11434"
 
 # Модель для реранкера
@@ -56,7 +57,8 @@ NEO4J_DATABASE = "neo4j"
 NEO4J_PASSWORD = "testpassword123"  # ЗАМЕНИТЕ НА ВАШ ПАРОЛЬ NEO4J
 
 # --- Мультимодальная LLM для анализа изображений ---
-OLLAMA_MULTIMODAL_LLM_MODEL_NAME = "qwen2.5vl:latest"
+# OLLAMA_MULTIMODAL_LLM_MODEL_NAME = "qwen2.5vl:latest"
+OLLAMA_MULTIMODAL_LLM_MODEL_NAME = "llava:7b"
 MULTIMODAL_LLM_REQUEST_TIMEOUT = 9000.0
 
 # --- Карта ключевых слов для определения типов льгот (СВО) ---

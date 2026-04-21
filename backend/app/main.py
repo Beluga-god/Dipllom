@@ -40,19 +40,19 @@ async def validate_benefit_type_dependency(
     request: Request,
     case_data: CaseDataInput
 ):
-    logger.debug(f"Запуск зависимости validate_benefit_type_dependency для типа: {case_data.pension_type}")
+    logger.debug(f"Запуск зависимости validate_benefit_type_dependency для типа: {case_data.benefit_type}")
     if not hasattr(request.app.state, 'benefit_types_config') or not request.app.state.benefit_types_config:
         logger.error("Конфигурация типов льгот не загружена в validate_benefit_type_dependency.")
         raise HTTPException(status_code=503, detail="Сервис временно недоступен: конфигурация типов льгот не загружена.")
     
     valid_benefit_type_ids = {bt.id for bt in request.app.state.benefit_types_config}
-    if case_data.pension_type not in valid_benefit_type_ids:
-        logger.warning(f"Недопустимый тип льготы '{case_data.pension_type}' получен в запросе. Допустимые: {valid_benefit_type_ids}")
+    if case_data.benefit_type not in valid_benefit_type_ids:
+        logger.warning(f"Недопустимый тип льготы '{case_data.benefit_type}' получен в запросе. Допустимые: {valid_benefit_type_ids}")
         raise HTTPException(
             status_code=422,
-            detail=f"Недопустимый тип льготы: '{case_data.pension_type}'. Допустимые типы: {', '.join(valid_benefit_type_ids)}."
+            detail=f"Недопустимый тип льготы: '{case_data.benefit_type}'. Допустимые типы: {', '.join(valid_benefit_type_ids)}."
         )
-    logger.debug(f"Тип льготы '{case_data.pension_type}' прошел валидацию в зависимости.")
+    logger.debug(f"Тип льготы '{case_data.benefit_type}' прошел валидацию в зависимости.")
     return case_data
 
 @asynccontextmanager
@@ -133,8 +133,8 @@ def format_case_description_for_rag_background(
     if pd.name_change_info:
         parts.append(f"Была смена ФИО: Старое ФИО: {pd.name_change_info.old_full_name or 'Не указ.'}, Дата: {pd.name_change_info.date_changed.strftime('%d.%m.%Y') if pd.name_change_info.date_changed else 'Не указ.'}.")
 
-    benefit_type_info = next((bt for bt in benefit_types_config if bt.id == case_data.pension_type), None)
-    benefit_type_display_name = benefit_type_info.display_name if benefit_type_info else case_data.pension_type
+    benefit_type_info = next((bt for bt in benefit_types_config if bt.id == case_data.benefit_type), None)
+    benefit_type_display_name = benefit_type_info.display_name if benefit_type_info else case_data.benefit_type
     parts.append(f"Запрашиваемый тип льготы: {benefit_type_display_name}.")
 
     if case_data.disability:
@@ -269,7 +269,7 @@ async def get_history(
     query = select(
         cases_table.c.id,
         cases_table.c.created_at, 
-        cases_table.c.pension_type,
+        cases_table.c.benefit_type,
         cases_table.c.final_status,
         cases_table.c.final_explanation,
         cases_table.c.rag_confidence,
@@ -369,8 +369,8 @@ async def download_document(
         logger.error(f"Error preparing data for document generation for case {case_id}: {e_prepare}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Ошибка подготовки данных для документа: {e_prepare}")
 
-    if not case_data_dict.get("pension_type"):
-        logger.error(f"Missing pension_type in case data for case_id {case_id} during document generation.")
+    if not case_data_dict.get("benefit_type"):
+        logger.error(f"Missing benefit_type in case data for case_id {case_id} during document generation.")
         raise HTTPException(status_code=500, detail="Недостаточно данных для генерации документа (отсутствует тип льготы).")
     
     try:
@@ -681,7 +681,7 @@ async def process_case_in_background(
 ):
     logger_bg.info(f"Начало фоновой обработки для case_id: {case_id}")
     try:
-        cache_key = f"rag_case_{case_data_dict.get('pension_type')}_{hash(str(case_data_dict))}"
+        cache_key = f"rag_case_{case_data_dict.get('benefit_type')}_{hash(str(case_data_dict))}"
         cached_result = rag_results_cache.get(cache_key)
         
         if cached_result:
@@ -721,7 +721,7 @@ async def process_case_in_background(
         rag_analysis_text, rag_confidence_score = await rag_engine.query(
             case_data=case_data_for_rag,
             case_description=case_description_full,
-            benefit_type=case_data_for_rag.pension_type,
+            benefit_type=case_data_for_rag.benefit_type,
             disability_info=case_data_dict.get("disability")
         )
         
@@ -773,8 +773,8 @@ async def submit_case_for_processing(
     conn: AsyncConnection = Depends(get_db_connection),
     current_user_with_role: Dict[str, Any] = Depends(auth.require_manager_role)
 ):
-    logger.info(f"User '{current_user_with_role.get('username')}' (role: {current_user_with_role.get('role')}) submitted case for processing: type {case_data.pension_type}")
-    logger.info(f"Получен запрос на создание и обработку дела для типа льготы: {case_data.pension_type}")
+    logger.info(f"User '{current_user_with_role.get('username')}' (role: {current_user_with_role.get('role')}) submitted case for processing: type {case_data.benefit_type}")
+    logger.info(f"Получен запрос на создание и обработку дела для типа льготы: {case_data.benefit_type}")
     
     rag_engine = request.app.state.rag_engine
     if not rag_engine:

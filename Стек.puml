@@ -1,0 +1,25 @@
+@startuml
+skinparam backgroundColor white
+skinparam defaultFontName Arial
+skinparam defaultFontSize 16
+skinparam activity {
+    BackgroundColor #EFF6FF
+    BorderColor #2563EB
+    RoundCorner 8
+    Shadowing false
+}
+skinparam arrow {
+    Color #2563EB
+    Thickness 2
+}
+hide empty description
+hide circle
+
+start
+:<b>Шаг 1</b>\nПользователь задаёт вопрос\n"Какие выплаты положены при ранении?";
+:<b>Шаг 2</b>\nГибридный поиск в базе знаний\n<font color="#64748B">[Векторный FAISS] + [BM25] + [Графовый Neo4j]</font>;
+:<b>Шаг 3</b>\nИзвлечение релевантных статей\n<font color="#64748B">• ФЗ-75: ст.1 — выплата 195 000 руб.\n• Указ №232: п.3 — бесплатное лечение</font>;
+:<b>Шаг 4</b>\nLLM генерирует ответ\nна основе найденного контекста;
+:<b>Шаг 5</b>\nОтвет пользователю +\nссылки на конкретные статьи;
+stop
+@enduml

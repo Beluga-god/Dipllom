@@ -10,7 +10,7 @@ import {
     Space,
     Descriptions
 } from 'antd';
-import { CheckCircleOutlined, WarningOutlined, ProfileOutlined, BookOutlined, SolutionOutlined, FileTextOutlined, UserOutlined, AuditOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined, WarningOutlined, ProfileOutlined, BookOutlined, SolutionOutlined, FileTextOutlined, UserOutlined, AuditOutlined, InfoCircleOutlined, GiftOutlined } from '@ant-design/icons';
 import { CaseFormDataTypeForRHF, OtherDocumentData } from '../../types';
 import SummaryInsights from '../SummaryInsights';
 
@@ -21,6 +21,21 @@ interface SummaryStepProps {
   formData: CaseFormDataTypeForRHF;
   onEditStep?: (stepIndex: number) => void; 
 }
+
+// Маппинг ID типа поддержки в отображаемое имя
+const getBenefitTypeDisplayName = (benefitTypeId: string | undefined): string => {
+    if (!benefitTypeId) return 'Не выбран';
+    
+    const benefitTypeMap: Record<string, string> = {
+        'monthly_payment': 'Ежемесячные денежные выплаты',
+        'housing_benefits': 'Жилищные льготы',
+        'medical_support': 'Медицинская помощь',
+        'educational_benefits': 'Образовательные льготы',
+        'tax_benefits': 'Налоговые льготы',
+        'land_benefits': 'Земельные участки',
+    };
+    return benefitTypeMap[benefitTypeId] || benefitTypeId;
+};
 
 // Вспомогательная функция для отображения списков тегов или простых элементов
 const renderSimpleList = (itemsString: string | undefined | null, title: string) => {
@@ -45,24 +60,20 @@ const SummaryStep: React.FC<SummaryStepProps> = ({ formData, onEditStep }) => {
     work_experience = { calculated_total_years: 0, records: [], raw_events: [] },
     pension_points,
     benefits,
-    // documents, // Это поле, вероятно, было для старой структуры. В CaseFormDataTypeForRHF есть submitted_documents
-    submitted_documents,
+    documents, // Это поле для документов
     has_incorrect_document,
     disability,
-    pension_type,
+    benefit_type,
     other_documents_extracted_data = []
   } = formData;
 
-  const pensionTypeLabel = 
-    pension_type === 'retirement_standard' ? 'Страховая по старости' :
-    pension_type === 'disability_social' ? 'Социальная по инвалидности' :
-    'Тип пенсии не выбран';
+  const benefitTypeLabel = getBenefitTypeDisplayName(benefit_type);
 
   return (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
-      <Title level={3} style={{ textAlign: 'center' }}>Сводка данных дела</Title>
+      <Title level={3} style={{ textAlign: 'center' }}>Сводка обращения</Title>
       <Text style={{ textAlign: 'center', fontSize: '18px'}}>
-        Тип пенсии: <Text strong style={{color: '#1890ff'}}>{pensionTypeLabel}</Text>
+        Тип поддержки: <Text strong style={{color: '#1890ff'}}>{benefitTypeLabel}</Text>
       </Text>
       <Divider />
 
@@ -89,7 +100,8 @@ const SummaryStep: React.FC<SummaryStepProps> = ({ formData, onEditStep }) => {
         )}
       </Descriptions>
 
-      {pension_type === 'retirement_standard' && (
+      {/* Секция с трудовым стажем — только для пенсионных типов */}
+      {benefit_type === 'retirement_standard' && (
         <>
           <Divider />
           <Descriptions bordered column={1} title={<><ProfileOutlined style={{marginRight: 8}}/>Трудовой стаж</>}>
@@ -122,7 +134,8 @@ const SummaryStep: React.FC<SummaryStepProps> = ({ formData, onEditStep }) => {
         </>
       )}
 
-      {pension_type === 'disability_social' && disability && (
+      {/* Секция с инвалидностью — только для соответствующих типов */}
+      {(benefit_type === 'disability_social' || benefit_type === 'disability_insurance') && disability && (
         <>
           <Divider />
           <Descriptions bordered column={1} title={<><AuditOutlined style={{marginRight: 8}}/>Сведения об инвалидности</>}>
@@ -140,13 +153,13 @@ const SummaryStep: React.FC<SummaryStepProps> = ({ formData, onEditStep }) => {
         <Descriptions.Item label="Количество иждивенцев">
             {personal_data.dependents !== null && personal_data.dependents !== undefined ? personal_data.dependents : 'Не указано'}
         </Descriptions.Item>
-        {pension_type === 'retirement_standard' && (
+        {benefit_type === 'retirement_standard' && (
             <Descriptions.Item label="Пенсионные баллы (ИПК)">
                 {pension_points !== null && pension_points !== undefined ? pension_points : 'Не указано'}
             </Descriptions.Item>
         )}
-        {renderSimpleList(benefits, 'Льготы')}
-        {renderSimpleList(submitted_documents, 'Представленные документы')}
+        {renderSimpleList(benefits, 'Льготы и выплаты')}
+        {renderSimpleList(documents, 'Представленные документы')}
         <Descriptions.Item label="Корректность оформления документов" span={2}>
           {has_incorrect_document ? 
             <Text type="danger"><WarningOutlined style={{marginRight: 4}} /> Указано наличие некорректно оформленных документов</Text> :

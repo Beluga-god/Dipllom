@@ -99,7 +99,7 @@ class OtherDocumentData(BaseModel):
 
 class CaseDataInput(BaseModel):
     personal_data: PersonalData
-    pension_type: str # Например, 'retirement_standard', 'disability', 'survivor'
+    benefit_type: str # Например, 'retirement_standard', 'disability', 'survivor'
     disability: Optional[DisabilityInfo] = None
     work_experience: Optional[WorkExperience] = None
     pension_points: Optional[float] = None
@@ -109,13 +109,13 @@ class CaseDataInput(BaseModel):
     # Поле для хранения извлеченных данных из дополнительных документов (OCR)
     other_documents_extracted_data: Optional[List[OtherDocumentData]] = Field(default_factory=list)
 
-    @field_validator('pension_type')
+    @field_validator('benefit_type')
     @classmethod
-    def validate_pension_type(cls, v: str, info: ValidationInfo) -> str:
-        """Валидатор для поля pension_type
+    def validate_benefit_type(cls, v: str, info: ValidationInfo) -> str:
+        """Валидатор для поля benefit_type
 
         Проверяет, что тип пенсии находится в списке доступных типов.
-        Проверка происходит в контроллере при наличии app.state.pension_types_config.
+        Проверка происходит в контроллере при наличии app.state.benefit_types_config.
         """
         # Валидация будет происходить в контроллере
         return v
@@ -163,7 +163,7 @@ class SnilsData(BaseModel):
 class CaseHistoryEntry(BaseModel):
     id: int
     created_at: datetime 
-    pension_type: str
+    benefit_type: str
     final_status: str
     final_explanation: Optional[str] = None
     rag_confidence: Optional[float] = None
@@ -250,7 +250,7 @@ class FullCaseData(BaseModel):
     id: int
     created_at: datetime
     updated_at: Optional[datetime] = None
-    pension_type: str
+    benefit_type: str
     personal_data: Optional[PersonalData] = None # Сделаем PersonalData опциональным на случай ошибок парсинга
     disability: Optional[DisabilityInfo] = None
     work_experience: Optional[WorkExperience] = None
